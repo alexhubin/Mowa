@@ -1,4 +1,4 @@
-mova.46.225.131.55.sslip.io {
+mova.hubindev.cc {
     encode zstd gzip
 
     @api path /api/*
@@ -15,7 +15,10 @@ mova.46.225.131.55.sslip.io {
     }
 }
 
+mova.46.225.131.55.sslip.io {
+    redir https://mova.hubindev.cc{uri} permanent
+}
+
 livekit.46.225.131.55.sslip.io {
     reverse_proxy 172.18.0.1:7880
 }
-
