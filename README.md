@@ -135,6 +135,12 @@ LIVEKIT_API_SECRET=replace-with-at-least-32-random-characters
 
 LiveKit работает с `network_mode: host`, чтобы корректно публиковать WebRTC-кандидаты и не прогонять медиа через Docker NAT. Перед запуском на сервере убедитесь, что эти порты и `80/443` не заняты другими проектами. Если на сервере уже есть общий reverse proxy, не запускайте сервис `caddy` из этого Compose без override: подключите `api:8080`, `web:8080` и LiveKit `127.0.0.1:7880` к существующему proxy.
 
+Для текущего VPS добавлен `compose.vps.yaml`: он не запускает второй Caddy и подключает `api`/`web` к внешней сети `northstar_default`. Файл `deploy/Caddyfile.vps-snippet` содержит два изолированных server block для общего proxy. Это окружение использует временные адреса `sslip.io`; после добавления собственных DNS-записей замените их в snippet и `.env`.
+
+```bash
+docker compose -f compose.yaml -f compose.vps.yaml up -d --build
+```
+
 Запуск:
 
 ```bash
@@ -169,4 +175,3 @@ frontend/                        React-приложение
 deploy/Caddyfile                 edge routing и TLS
 compose.yaml                     полный локальный/production стек
 ```
-

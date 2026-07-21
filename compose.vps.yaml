@@ -1,0 +1,24 @@
+services:
+  api:
+    networks:
+      app:
+      proxy:
+        aliases:
+          - mova-api
+
+  web:
+    networks:
+      app:
+      proxy:
+        aliases:
+          - mova-web
+
+  caddy:
+    profiles:
+      - standalone
+
+networks:
+  proxy:
+    external: true
+    name: northstar_default
+
