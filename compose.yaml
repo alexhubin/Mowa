@@ -75,6 +75,8 @@ services:
         turn:
           enabled: true
           udp_port: 3478
+          relay_range_start: 40000
+          relay_range_end: 40100
         keys:
           ${LIVEKIT_API_KEY:-devkey}: ${LIVEKIT_API_SECRET:-secretsecretsecretsecretsecretsecret}
 

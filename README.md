@@ -132,6 +132,7 @@ LIVEKIT_API_SECRET=replace-with-at-least-32-random-characters
 - `7881/tcp` — WebRTC через TCP;
 - `7882/udp` — WebRTC UDP mux;
 - `3478/udp` — встроенный TURN/UDP.
+- `40000:40100/udp` — ограниченный диапазон relay-портов TURN.
 
 LiveKit работает с `network_mode: host`, чтобы корректно публиковать WebRTC-кандидаты и не прогонять медиа через Docker NAT. Перед запуском на сервере убедитесь, что эти порты и `80/443` не заняты другими проектами. Если на сервере уже есть общий reverse proxy, не запускайте сервис `caddy` из этого Compose без override: подключите `api:8080`, `web:8080` и LiveKit `127.0.0.1:7880` к существующему proxy.
 
