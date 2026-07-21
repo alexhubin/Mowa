@@ -149,8 +149,6 @@ LiveKit работает с `network_mode: host`, чтобы корректно 
 docker compose -f compose.yaml -f compose.vps.yaml up -d --build
 ```
 
-При обновлении старой установки Mova с SQLite сначала сделайте snapshot файлов `mova.db`, `mova.db-wal` и `mova.db-shm`. Скрипт `scripts/migrate_sqlite_to_postgres.py` создаёт транзакционный SQL-импорт пользователей, действующих сессий и групповых комнат; для старых аккаунтов username безопасно формируется из части email до `@`. Исходный SQLite volume не удаляйте до проверки новой версии.
-
 Запуск:
 
 ```bash

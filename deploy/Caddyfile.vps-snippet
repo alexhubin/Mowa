@@ -15,10 +15,6 @@ mova.hubindev.cc {
     }
 }
 
-mova.46.225.131.55.sslip.io {
-    redir https://mova.hubindev.cc{uri} permanent
-}
-
-livekit.hubindev.cc, livekit.46.225.131.55.sslip.io {
+livekit.hubindev.cc {
     reverse_proxy 172.18.0.1:7880
 }
