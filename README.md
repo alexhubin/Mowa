@@ -143,7 +143,7 @@ LIVEKIT_API_SECRET=replace-with-at-least-32-random-characters
 
 LiveKit работает с `network_mode: host`, чтобы корректно публиковать WebRTC-кандидаты и не прогонять медиа через Docker NAT. Перед запуском на сервере убедитесь, что эти порты и `80/443` не заняты другими проектами. Если на сервере уже есть общий reverse proxy, не запускайте сервис `caddy` из этого Compose без override: подключите `api:8080`, `web:8080` и LiveKit `127.0.0.1:7880` к существующему proxy.
 
-Для текущего VPS добавлен `compose.vps.yaml`: он не запускает второй Caddy и подключает `api`/`web` к внешней сети `northstar_default`. Файл `deploy/Caddyfile.vps-snippet` содержит изолированные server block для общего proxy. Приложение доступно на `mova.hubindev.cc`; LiveKit пока использует адрес `livekit.46.225.131.55.sslip.io`.
+Для текущего VPS добавлен `compose.vps.yaml`: он не запускает второй Caddy и подключает `api`/`web` к внешней сети `northstar_default`. Файл `deploy/Caddyfile.vps-snippet` содержит изолированные server block для общего proxy. Приложение доступно на `mova.hubindev.cc`, LiveKit — на `livekit.hubindev.cc`. DNS-запись LiveKit должна оставаться в режиме DNS only, чтобы WebRTC-трафик шёл напрямую на VPS.
 
 ```bash
 docker compose -f compose.yaml -f compose.vps.yaml up -d --build
