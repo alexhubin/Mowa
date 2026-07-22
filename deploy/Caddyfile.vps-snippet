@@ -16,8 +16,5 @@ mova.hubindev.cc {
 }
 
 livekit.hubindev.cc {
-    @root path /
-    respond @root 404
-
     reverse_proxy 172.18.0.1:7880
 }
