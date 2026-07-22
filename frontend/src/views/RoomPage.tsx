@@ -67,7 +67,6 @@ export function RoomPage() {
     queryKey: ['calls'],
     queryFn: () => api<DirectCall[]>('/api/calls'),
     enabled: Boolean(user && !user.must_change_password),
-    refetchInterval: 2_000,
   })
   const messagesQuery = useQuery({
     queryKey: ['room-messages', inviteCode],
