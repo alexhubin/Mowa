@@ -132,13 +132,10 @@ func TestPersistentAccountsFriendsAndDirectCall(t *testing.T) {
 	}
 
 	response = doJSON(t, annaClient, http.MethodPut, server.URL+"/api/account/settings", map[string]string{"video_quality": "original"})
-	if response.StatusCode != http.StatusOK {
-		t.Fatalf("update original settings status = %d, body = %s", response.StatusCode, responseBody(t, response))
+	if response.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("removed original quality status = %d", response.StatusCode)
 	}
-	decodeResponse(t, response, &settings)
-	if settings.VideoQuality != "original" {
-		t.Fatalf("original video quality = %q", settings.VideoQuality)
-	}
+	response.Body.Close()
 
 	response = doJSON(t, annaClient, http.MethodPut, server.URL+"/api/account/settings", map[string]string{"video_quality": "medium"})
 	if response.StatusCode != http.StatusUnprocessableEntity {
