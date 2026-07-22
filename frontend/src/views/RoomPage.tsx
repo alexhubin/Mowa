@@ -4,8 +4,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Check,
   Copy,
+  Maximize2,
   Mic,
   MicOff,
+  Minimize2,
   MonitorUp,
   PhoneOff,
   Radio,
@@ -31,6 +33,7 @@ export function RoomPage() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const audioHost = useRef<HTMLDivElement>(null)
+  const stageRef = useRef<HTMLElement>(null)
   const activeCall = useRef<Room | null>(null)
   const directCallID = useRef<string | null>(null)
   const [call, setCall] = useState<Room | null>(null)
@@ -39,6 +42,7 @@ export function RoomPage() {
   const [controlError, setControlError] = useState('')
   const [controlBusy, setControlBusy] = useState(false)
   const [callSettingsOpen, setCallSettingsOpen] = useState(false)
+  const [fullscreen, setFullscreen] = useState(false)
 
   const { data: user, isLoading: userLoading } = useQuery({ queryKey: ['me'], queryFn: currentUser })
   const roomQuery = useQuery({
@@ -62,6 +66,12 @@ export function RoomPage() {
     const openSettings = () => setCallSettingsOpen(true)
     window.addEventListener('mova:open-call-settings', openSettings)
     return () => window.removeEventListener('mova:open-call-settings', openSettings)
+  }, [])
+
+  useEffect(() => {
+    const syncFullscreen = () => setFullscreen(document.fullscreenElement === stageRef.current)
+    document.addEventListener('fullscreenchange', syncFullscreen)
+    return () => document.removeEventListener('fullscreenchange', syncFullscreen)
   }, [])
 
   useEffect(() => {
@@ -170,6 +180,12 @@ export function RoomPage() {
     .map((participant) => participant.getTrackPublication(Track.Source.ScreenShare))
     .find((publication) => publication !== undefined)
 
+  useEffect(() => {
+    if (!screenPublication && document.fullscreenElement === stageRef.current) {
+      void document.exitFullscreen()
+    }
+  }, [screenPublication])
+
   async function toggleMic() {
     if (!call) return
     setControlBusy(true)
@@ -192,10 +208,8 @@ export function RoomPage() {
       const enable = !call.localParticipant.isScreenShareEnabled
       const quality = settingsQuery.data?.video_quality ?? 'high'
       const resolution = quality === 'low'
-        ? ScreenSharePresets.h720fps15.resolution
-        : quality === 'medium'
-          ? ScreenSharePresets.h1080fps15.resolution
-          : ScreenSharePresets.h1080fps30.resolution
+        ? ScreenSharePresets.h720fps30.resolution
+        : ScreenSharePresets.h1080fps30.resolution
       await call.localParticipant.setScreenShareEnabled(enable, enable ? { resolution } : undefined)
       render((value) => value + 1)
     } catch (error) {
@@ -212,6 +226,16 @@ export function RoomPage() {
       window.setTimeout(() => setCopied(false), 1800)
     } catch {
       setControlError('Не удалось скопировать ссылку')
+    }
+  }
+
+  async function toggleFullscreen() {
+    setControlError('')
+    try {
+      if (document.fullscreenElement) await document.exitFullscreen()
+      else await stageRef.current?.requestFullscreen()
+    } catch {
+      setControlError('Полноэкранный режим недоступен в этом браузере')
     }
   }
 
@@ -288,9 +312,14 @@ export function RoomPage() {
         </section>
       ) : (
         <div className="call-grid">
-          <section className="stage-panel">
+          <section ref={stageRef} className="stage-panel">
             {screenPublication ? (
-              <ScreenTrack publication={screenPublication} />
+              <>
+                <ScreenTrack publication={screenPublication} />
+                <button className="fullscreen-button" onClick={toggleFullscreen} aria-label={fullscreen ? 'Выйти из полноэкранного режима' : 'Развернуть трансляцию на весь экран'} title={fullscreen ? 'Выйти из полноэкранного режима' : 'На весь экран'}>
+                  {fullscreen ? <Minimize2 size={18} /> : <Maximize2 size={18} />}<span>{fullscreen ? 'Свернуть' : 'На весь экран'}</span>
+                </button>
+              </>
             ) : (
               <div className="empty-stage">
                 <h2>Никто не демонстрирует экран</h2>
@@ -375,7 +404,7 @@ function CallSettingsModal({ room, settings, onClose, onSettingsSaved }: { room:
         <div className="mt-5 space-y-4">
           <CallDeviceSelect label="Микрофон" value={deviceValues.audioInputId} devices={devices.inputs} onChange={(value) => selectDevice('audioInputId', 'audioinput', value)} />
           <CallDeviceSelect label="Наушники или динамики" value={deviceValues.audioOutputId} devices={devices.outputs} onChange={(value) => selectDevice('audioOutputId', 'audiooutput', value)} disabled={!('setSinkId' in HTMLMediaElement.prototype)} />
-          <label className="field-label">Качество демонстрации экрана<select className="text-input" value={settings?.video_quality ?? 'high'} onChange={(event) => quality.mutate(event.target.value as AccountSettings['video_quality'])} disabled={quality.isPending}><option value="low">720p · 15 кадров/с</option><option value="medium">1080p · 15 кадров/с</option><option value="high">1080p · 30 кадров/с</option></select></label>
+          <label className="field-label">Качество демонстрации экрана<select className="text-input" value={settings?.video_quality ?? 'high'} onChange={(event) => quality.mutate(event.target.value as AccountSettings['video_quality'])} disabled={quality.isPending}><option value="low">720p · 30 кадров/с</option><option value="high">1080p · 30 кадров/с</option></select></label>
           <p className="settings-hint">Микрофон и звук переключаются сразу. Качество применяется при следующем запуске демонстрации экрана.</p>
           {(error || quality.error) && <p className="error-note">{error || quality.error?.message}</p>}
         </div>

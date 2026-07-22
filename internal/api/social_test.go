@@ -121,15 +121,21 @@ func TestPersistentAccountsFriendsAndDirectCall(t *testing.T) {
 	}
 	response.Body.Close()
 
-	response = doJSON(t, annaClient, http.MethodPut, server.URL+"/api/account/settings", map[string]string{"video_quality": "medium"})
+	response = doJSON(t, annaClient, http.MethodPut, server.URL+"/api/account/settings", map[string]string{"video_quality": "low"})
 	if response.StatusCode != http.StatusOK {
 		t.Fatalf("update settings status = %d, body = %s", response.StatusCode, responseBody(t, response))
 	}
 	var settings settingsResponse
 	decodeResponse(t, response, &settings)
-	if settings.VideoQuality != "medium" {
+	if settings.VideoQuality != "low" {
 		t.Fatalf("video quality = %q", settings.VideoQuality)
 	}
+
+	response = doJSON(t, annaClient, http.MethodPut, server.URL+"/api/account/settings", map[string]string{"video_quality": "medium"})
+	if response.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("deprecated 15 fps quality status = %d", response.StatusCode)
+	}
+	response.Body.Close()
 
 	response = doJSON(t, annaClient, http.MethodPatch, server.URL+"/api/account/profile", map[string]string{"username": "anna_voice", "display_name": "Анна Нова"})
 	if response.StatusCode != http.StatusOK {
