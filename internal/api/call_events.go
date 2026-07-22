@@ -62,8 +62,11 @@ func (s *Server) streamCallEvents(w http.ResponseWriter, r *http.Request) {
 	defer unsubscribe()
 	keepAlive := time.NewTicker(25 * time.Second)
 	defer keepAlive.Stop()
+	controller := http.NewResponseController(w)
+	writeDeadline := func() { _ = controller.SetWriteDeadline(time.Now().Add(35 * time.Second)) }
 
 	writeEvent := func() bool {
+		writeDeadline()
 		if _, err := fmt.Fprint(w, "event: calls\ndata: {}\n\n"); err != nil {
 			return false
 		}
@@ -83,6 +86,7 @@ func (s *Server) streamCallEvents(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 		case <-keepAlive.C:
+			writeDeadline()
 			if _, err := fmt.Fprint(w, ": keepalive\n\n"); err != nil {
 				return
 			}

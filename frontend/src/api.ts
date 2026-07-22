@@ -21,6 +21,17 @@ export type RoomToken = {
   expires_in: number
 }
 
+export type RoomMessage = {
+  id: string
+  body: string
+  author: {
+    id: string
+    username: string
+    display_name: string
+  }
+  created_at: string
+}
+
 export type FriendUser = {
   id: string
   username: string

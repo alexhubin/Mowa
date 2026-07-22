@@ -123,6 +123,55 @@ func TestAuthRoomAndLiveKitTokenFlow(t *testing.T) {
 		t.Fatalf("unexpected LiveKit grants: %+v", grants.Video)
 	}
 
+	response = doJSON(t, client, http.MethodGet, server.URL+"/api/rooms/"+room.InviteCode+"/messages", nil)
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("empty messages status = %d, body = %s", response.StatusCode, responseBody(t, response))
+	}
+	var messages []roomMessageResponse
+	decodeResponse(t, response, &messages)
+	if len(messages) != 0 {
+		t.Fatalf("expected empty messages, got %+v", messages)
+	}
+
+	response = doJSON(t, client, http.MethodPost, server.URL+"/api/rooms/"+room.InviteCode+"/messages", map[string]string{"body": "  Привет, команда!  "})
+	if response.StatusCode != http.StatusCreated {
+		t.Fatalf("create message status = %d, body = %s", response.StatusCode, responseBody(t, response))
+	}
+	var message roomMessageResponse
+	decodeResponse(t, response, &message)
+	if message.Body != "Привет, команда!" || message.Author.ID != me.ID || message.Author.Username != me.Username {
+		t.Fatalf("unexpected message response: %+v", message)
+	}
+
+	response = doJSON(t, client, http.MethodGet, server.URL+"/api/rooms/"+room.InviteCode+"/messages", nil)
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("list messages status = %d, body = %s", response.StatusCode, responseBody(t, response))
+	}
+	decodeResponse(t, response, &messages)
+	if len(messages) != 1 || messages[0].ID != message.ID {
+		t.Fatalf("unexpected messages: %+v", messages)
+	}
+
+	request, err = http.NewRequest(http.MethodGet, server.URL+"/api/rooms/"+room.InviteCode+"/messages/events", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err = client.Do(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	line, err = bufio.NewReader(response.Body).ReadString('\n')
+	response.Body.Close()
+	if err != nil || line != "event: messages\n" {
+		t.Fatalf("initial message event = %q, error = %v", line, err)
+	}
+
+	response = doJSON(t, client, http.MethodPost, server.URL+"/api/rooms/"+room.InviteCode+"/messages", map[string]string{"body": "   "})
+	if response.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("blank message status = %d, body = %s", response.StatusCode, responseBody(t, response))
+	}
+	response.Body.Close()
+
 	response = doJSON(t, client, http.MethodPost, server.URL+"/api/auth/logout", nil)
 	if response.StatusCode != http.StatusNoContent {
 		t.Fatalf("logout status = %d", response.StatusCode)
@@ -288,7 +337,7 @@ func newTestServer(t *testing.T) (*httptest.Server, *http.Client, *sql.DB) {
 		t.Fatalf("open database: %v", err)
 	}
 	t.Cleanup(func() { db.Close() })
-	if _, err := db.ExecContext(context.Background(), "TRUNCATE direct_calls, friendships, friend_requests, room_members, rooms, sessions, user_settings, users CASCADE"); err != nil {
+	if _, err := db.ExecContext(context.Background(), "TRUNCATE room_messages, direct_calls, friendships, friend_requests, room_members, rooms, sessions, user_settings, users CASCADE"); err != nil {
 		t.Fatalf("reset test database: %v", err)
 	}
 

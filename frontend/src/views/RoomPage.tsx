@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { Link, Navigate, useNavigate, useParams } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Check,
   Copy,
   Maximize2,
+  MessageSquare,
   Mic,
   MicOff,
   Minimize2,
@@ -12,7 +13,9 @@ import {
   PhoneOff,
   Radio,
   Settings,
+  Send,
   SlidersHorizontal,
+  Users,
   X,
 } from 'lucide-react'
 import {
@@ -24,7 +27,7 @@ import {
   type Participant,
   type TrackPublication,
 } from 'livekit-client'
-import { api, currentUser, type AccountSettings, type DirectCall, type RoomInfo, type RoomToken } from '../api'
+import { api, currentUser, type AccountSettings, type DirectCall, type RoomInfo, type RoomMessage, type RoomToken } from '../api'
 import { loadDeviceSettings, requestAndListAudioDevices, saveDeviceSettings, type LocalDeviceSettings } from '../deviceSettings'
 import { applyMicrophoneGain } from '../microphoneProcessor'
 import { initials, inviteURL } from '../utils'
@@ -35,6 +38,8 @@ export function RoomPage() {
   const queryClient = useQueryClient()
   const audioHost = useRef<HTMLDivElement>(null)
   const stageRef = useRef<HTMLElement>(null)
+  const sidePanelRef = useRef<HTMLElement>(null)
+  const messagesEndRef = useRef<HTMLDivElement>(null)
   const activeCall = useRef<Room | null>(null)
   const directCallID = useRef<string | null>(null)
   const [call, setCall] = useState<Room | null>(null)
@@ -44,6 +49,8 @@ export function RoomPage() {
   const [controlBusy, setControlBusy] = useState(false)
   const [callSettingsOpen, setCallSettingsOpen] = useState(false)
   const [fullscreen, setFullscreen] = useState(false)
+  const [sidePanel, setSidePanel] = useState<'participants' | 'chat'>('participants')
+  const [messageBody, setMessageBody] = useState('')
 
   const { data: user, isLoading: userLoading } = useQuery({ queryKey: ['me'], queryFn: currentUser })
   const roomQuery = useQuery({
@@ -61,6 +68,23 @@ export function RoomPage() {
     queryFn: () => api<DirectCall[]>('/api/calls'),
     enabled: Boolean(user && !user.must_change_password),
     refetchInterval: 2_000,
+  })
+  const messagesQuery = useQuery({
+    queryKey: ['room-messages', inviteCode],
+    queryFn: () => api<RoomMessage[]>(`/api/rooms/${inviteCode}/messages`),
+    enabled: call?.state === ConnectionState.Connected,
+  })
+  const sendMessage = useMutation({
+    mutationFn: (body: string) => api<RoomMessage>(`/api/rooms/${inviteCode}/messages`, {
+      method: 'POST',
+      body: JSON.stringify({ body }),
+    }),
+    onSuccess: (message) => {
+      queryClient.setQueryData<RoomMessage[]>(['room-messages', inviteCode], (current = []) => (
+        current.some((item) => item.id === message.id) ? current : [...current, message]
+      ))
+      setMessageBody('')
+    },
   })
 
   useEffect(() => {
@@ -194,6 +218,22 @@ export function RoomPage() {
     }
   }, [screenPublication])
 
+  useEffect(() => {
+    if (call?.state !== ConnectionState.Connected) return
+    const events = new EventSource(`/api/rooms/${inviteCode}/messages/events`)
+    const refreshMessages = () => void queryClient.invalidateQueries({ queryKey: ['room-messages', inviteCode] })
+    events.addEventListener('messages', refreshMessages)
+    return () => {
+      events.removeEventListener('messages', refreshMessages)
+      events.close()
+    }
+  }, [call?.state, inviteCode, queryClient])
+
+  useEffect(() => {
+    if (sidePanel !== 'chat') return
+    messagesEndRef.current?.scrollIntoView({ block: 'end' })
+  }, [messagesQuery.data, sidePanel])
+
   async function toggleMic() {
     if (!call) return
     setControlBusy(true)
@@ -277,6 +317,20 @@ export function RoomPage() {
     }
   }
 
+  function openChat() {
+    setSidePanel('chat')
+    if (window.matchMedia('(max-width: 760px)').matches) {
+      window.requestAnimationFrame(() => sidePanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }))
+    }
+  }
+
+  function submitMessage(event: FormEvent) {
+    event.preventDefault()
+    const body = messageBody.trim()
+    if (!body || sendMessage.isPending) return
+    sendMessage.mutate(body)
+  }
+
   async function leave() {
     const room = activeCall.current
     activeCall.current = null
@@ -325,7 +379,7 @@ export function RoomPage() {
     <main className="room-page">
       <div ref={audioHost} className="hidden" aria-hidden="true" />
       <div className="room-topbar">
-        <Link to="/" className="brand room-brand"><span className="brand-dot" /><span>mowa</span></Link>
+        <Link to="/" className="brand room-brand"><span className="brand-dot" /><span>Mowa</span></Link>
         <h1>{roomQuery.data.name}</h1>
         <code>{inviteCode}</code>
         <button className="button-secondary compact" onClick={copyInvite}>{copied ? <Check size={15} /> : <Copy size={15} />} {copied ? 'Скопировано' : 'Копировать ссылку'}</button>
@@ -366,10 +420,47 @@ export function RoomPage() {
             )}
           </section>
 
-          <aside className="participants-panel">
-            <div className="participants-list">
-              {participants.map((participant) => <ParticipantRow key={participant.identity} participant={participant} local={participant.identity === call.localParticipant.identity} />)}
+          <aside ref={sidePanelRef} className="room-side-panel">
+            <div className="room-side-tabs" role="tablist" aria-label="Панель комнаты">
+              <button className={sidePanel === 'participants' ? 'active' : ''} onClick={() => setSidePanel('participants')} role="tab" aria-selected={sidePanel === 'participants'}><Users size={16} />Участники <span>{participants.length}</span></button>
+              <button className={sidePanel === 'chat' ? 'active' : ''} onClick={() => setSidePanel('chat')} role="tab" aria-selected={sidePanel === 'chat'}><MessageSquare size={16} />Чат</button>
             </div>
+            {sidePanel === 'participants' ? (
+              <div className="participants-panel" role="tabpanel">
+                <div className="participants-list">
+                  {participants.map((participant) => <ParticipantRow key={participant.identity} participant={participant} local={participant.identity === call.localParticipant.identity} />)}
+                </div>
+              </div>
+            ) : (
+              <section className="chat-panel" role="tabpanel" aria-label="Чат комнаты">
+                <div className="chat-messages" aria-live="polite">
+                  {messagesQuery.isLoading && <p className="chat-state">Загружаем сообщения…</p>}
+                  {messagesQuery.error && <p className="chat-state error">Не удалось загрузить сообщения</p>}
+                  {!messagesQuery.isLoading && !messagesQuery.error && messagesQuery.data?.length === 0 && <p className="chat-state">Здесь пока тихо. Напишите первым.</p>}
+                  {messagesQuery.data?.map((message) => <ChatMessage key={message.id} message={message} own={message.author.id === user.id} />)}
+                  <div ref={messagesEndRef} />
+                </div>
+                <form className="chat-composer" onSubmit={submitMessage}>
+                  <textarea
+                    value={messageBody}
+                    onChange={(event) => setMessageBody(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) {
+                        event.preventDefault()
+                        event.currentTarget.form?.requestSubmit()
+                      }
+                    }}
+                    maxLength={2000}
+                    rows={2}
+                    placeholder="Сообщение…"
+                    aria-label="Сообщение"
+                  />
+                  <button type="submit" disabled={!messageBody.trim() || sendMessage.isPending} aria-label="Отправить сообщение"><Send size={18} /></button>
+                  {messageBody.length > 1800 && <small>{messageBody.length}/2000</small>}
+                </form>
+                {sendMessage.error && <p className="chat-send-error" role="alert">{sendMessage.error.message}</p>}
+              </section>
+            )}
           </aside>
         </div>
       )}
@@ -384,6 +475,9 @@ export function RoomPage() {
           </button>
           <button className="call-control" onClick={() => setCallSettingsOpen(true)} aria-label="Настройки звонка" title="Настройки звонка">
             <Settings size={21} />
+          </button>
+          <button className={`call-control ${sidePanel === 'chat' ? 'active' : ''}`} onClick={openChat} aria-label="Открыть чат" title="Чат">
+            <MessageSquare size={21} />
           </button>
           <button className="call-control danger" onClick={leave} aria-label="Выйти из комнаты" title="Выйти">
             <PhoneOff size={21} />
@@ -525,6 +619,17 @@ function ParticipantRow({ participant, local }: { participant: Participant; loca
       </div>
       <span className={muted ? 'mic-state muted' : 'mic-state'}>{muted ? <MicOff size={14} /> : <Mic size={14} />}</span>
     </div>
+  )
+}
+
+const messageTime = new Intl.DateTimeFormat('ru-RU', { hour: '2-digit', minute: '2-digit' })
+
+function ChatMessage({ message, own }: { message: RoomMessage; own: boolean }) {
+  return (
+    <article className={`chat-message ${own ? 'own' : ''}`}>
+      <div className="chat-message-heading"><strong>{own ? 'Вы' : message.author.display_name}</strong><time dateTime={message.created_at}>{messageTime.format(new Date(message.created_at))}</time></div>
+      <p>{message.body}</p>
+    </article>
   )
 }
 

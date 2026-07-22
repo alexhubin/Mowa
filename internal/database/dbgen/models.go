@@ -75,6 +75,14 @@ type RoomMember struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+type RoomMessage struct {
+	ID        string    `json:"id"`
+	RoomID    string    `json:"room_id"`
+	UserID    string    `json:"user_id"`
+	Body      string    `json:"body"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 type Session struct {
 	TokenHash  string    `json:"token_hash"`
 	UserID     string    `json:"user_id"`

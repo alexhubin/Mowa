@@ -36,15 +36,16 @@ const (
 var usernamePattern = regexp.MustCompile(`^[a-z0-9_]{3,32}$`)
 
 type Server struct {
-	db         *sql.DB
-	queries    *dbgen.Queries
-	cfg        config.Config
-	issuer     media.TokenIssuer
-	now        func() time.Time
-	newID      func() string
-	newInvite  func() (string, error)
-	callEvents *callEventBroker
-	webAuthn   *webauthn.WebAuthn
+	db            *sql.DB
+	queries       *dbgen.Queries
+	cfg           config.Config
+	issuer        media.TokenIssuer
+	now           func() time.Time
+	newID         func() string
+	newInvite     func() (string, error)
+	callEvents    *callEventBroker
+	messageEvents *messageEventBroker
+	webAuthn      *webauthn.WebAuthn
 }
 
 type contextKey string
@@ -65,14 +66,15 @@ func New(db *sql.DB, cfg config.Config) (*Server, error) {
 		return nil, err
 	}
 	return &Server{
-		db:         db,
-		queries:    dbgen.New(db),
-		cfg:        cfg,
-		callEvents: newCallEventBroker(),
-		webAuthn:   webAuthn,
-		issuer:     media.TokenIssuer{APIKey: cfg.LiveKitAPIKey, APISecret: cfg.LiveKitAPISecret, TTL: cfg.LiveKitTokenTTL},
-		now:        time.Now,
-		newID:      uuid.NewString,
+		db:            db,
+		queries:       dbgen.New(db),
+		cfg:           cfg,
+		callEvents:    newCallEventBroker(),
+		messageEvents: newMessageEventBroker(),
+		webAuthn:      webAuthn,
+		issuer:        media.TokenIssuer{APIKey: cfg.LiveKitAPIKey, APISecret: cfg.LiveKitAPISecret, TTL: cfg.LiveKitTokenTTL},
+		now:           time.Now,
+		newID:         uuid.NewString,
 		newInvite: func() (string, error) {
 			value := make([]byte, 8)
 			if _, err := rand.Read(value); err != nil {
@@ -127,6 +129,9 @@ func (s *Server) Handler() http.Handler {
 		r.Post("/api/rooms", s.createRoom)
 		r.Get("/api/rooms/{inviteCode}", s.getRoom)
 		r.Post("/api/rooms/{inviteCode}/token", s.roomToken)
+		r.Get("/api/rooms/{inviteCode}/messages", s.listRoomMessages)
+		r.Post("/api/rooms/{inviteCode}/messages", s.createRoomMessage)
+		r.Get("/api/rooms/{inviteCode}/messages/events", s.streamRoomMessageEvents)
 		r.Post("/api/presence", s.presence)
 	})
 
@@ -136,7 +141,7 @@ func (s *Server) Handler() http.Handler {
 func requestTimeout(next http.Handler) http.Handler {
 	standard := middleware.Timeout(15 * time.Second)(next)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/api/calls/events" {
+		if r.URL.Path == "/api/calls/events" || strings.HasSuffix(r.URL.Path, "/messages/events") {
 			next.ServeHTTP(w, r)
 			return
 		}
