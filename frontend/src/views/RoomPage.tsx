@@ -207,10 +207,20 @@ export function RoomPage() {
     try {
       const enable = !call.localParticipant.isScreenShareEnabled
       const quality = settingsQuery.data?.video_quality ?? 'high'
-      const resolution = quality === 'low'
-        ? ScreenSharePresets.h720fps30.resolution
-        : ScreenSharePresets.h1080fps30.resolution
-      await call.localParticipant.setScreenShareEnabled(enable, enable ? { resolution } : undefined)
+      const preset = quality === 'low'
+        ? ScreenSharePresets.h720fps30
+        : ScreenSharePresets.h1080fps30
+      await call.localParticipant.setScreenShareEnabled(
+        enable,
+        enable ? { resolution: preset.resolution, contentHint: 'detail' } : undefined,
+        enable
+          ? {
+              screenShareEncoding: preset.encoding,
+              simulcast: true,
+              degradationPreference: 'maintain-resolution',
+            }
+          : undefined,
+      )
       render((value) => value + 1)
     } catch (error) {
       setControlError(error instanceof Error ? error.message : 'Демонстрация экрана недоступна в этом браузере')
