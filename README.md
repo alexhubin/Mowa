@@ -42,7 +42,7 @@ The API never proxies audio or screen-sharing traffic. It validates cookie sessi
 - Go 1.26, `chi`, `database/sql`, the pure-Go `pgx` driver, and `go-webauthn`
 - PostgreSQL 18; the backend is built with `CGO_ENABLED=0`
 - `sqlc` for type-safe queries and `goose` for embedded migrations
-- React, TypeScript, Vite, TanStack Router, TanStack Query, and Tailwind CSS
+- Node.js 24, React, TypeScript, Vite, TanStack Router, TanStack Query, and Tailwind CSS
 - LiveKit Server, Docker Compose, and Caddy
 
 ## Local setup
