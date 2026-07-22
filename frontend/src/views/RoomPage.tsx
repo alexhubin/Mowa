@@ -26,6 +26,7 @@ import {
 } from 'livekit-client'
 import { api, currentUser, type AccountSettings, type DirectCall, type RoomInfo, type RoomToken } from '../api'
 import { loadDeviceSettings, requestAndListAudioDevices, saveDeviceSettings, type LocalDeviceSettings } from '../deviceSettings'
+import { applyMicrophoneGain } from '../microphoneProcessor'
 import { initials, inviteURL } from '../utils'
 
 export function RoomPage() {
@@ -155,14 +156,14 @@ export function RoomPage() {
       if (activeCall.current !== nextCall) return nextCall
 
       const devices = loadDeviceSettings()
-      if (devices.audioInputId) {
-        await nextCall.switchActiveDevice('audioinput', devices.audioInputId, false).catch(() => undefined)
-      }
       if (devices.audioOutputId) {
         await nextCall.switchActiveDevice('audiooutput', devices.audioOutputId, false).catch(() => undefined)
       }
       try {
-        await nextCall.localParticipant.setMicrophoneEnabled(true)
+        const publication = await nextCall.localParticipant.setMicrophoneEnabled(true, microphoneCaptureOptions(devices))
+        if (devices.microphoneGain !== 100) {
+          await applyMicrophoneGain(publication?.audioTrack, devices.microphoneGain)
+        }
       } catch {
         setControlError('Микрофон не включён. Разрешите доступ в настройках браузера и попробуйте ещё раз.')
       }
@@ -198,7 +199,15 @@ export function RoomPage() {
     setControlBusy(true)
     setControlError('')
     try {
-      await call.localParticipant.setMicrophoneEnabled(!call.localParticipant.isMicrophoneEnabled)
+      const enable = !call.localParticipant.isMicrophoneEnabled
+      const devices = loadDeviceSettings()
+      const publication = await call.localParticipant.setMicrophoneEnabled(
+        enable,
+        enable ? microphoneCaptureOptions(devices) : undefined,
+      )
+      if (enable && devices.microphoneGain !== 100) {
+        await applyMicrophoneGain(publication?.audioTrack, devices.microphoneGain)
+      }
       render((value) => value + 1)
     } catch (error) {
       setControlError(error instanceof Error ? error.message : 'Нет доступа к микрофону')
@@ -412,7 +421,7 @@ function CallSettingsModal({ room, settings, onClose, onSettingsSaved }: { room:
     }
   }
 
-  async function selectDevice(key: keyof LocalDeviceSettings, kind: 'audioinput' | 'audiooutput', value: string) {
+  async function selectDevice(key: 'audioInputId' | 'audioOutputId', kind: 'audioinput' | 'audiooutput', value: string) {
     const next = { ...deviceValues, [key]: value }
     setDeviceValues(next)
     saveDeviceSettings(next)
@@ -425,6 +434,29 @@ function CallSettingsModal({ room, settings, onClose, onSettingsSaved }: { room:
     }
   }
 
+  function setMicrophoneGain(value: number) {
+    const next = { ...deviceValues, microphoneGain: value }
+    setDeviceValues(next)
+    saveDeviceSettings(next)
+    const track = room?.localParticipant.getTrackPublication(Track.Source.Microphone)?.audioTrack
+    if (!track) return
+    void applyMicrophoneGain(track, value).catch(() => setError('Не удалось изменить громкость микрофона в этом браузере.'))
+  }
+
+  async function setNoiseSuppression(enabled: boolean) {
+    const next = { ...deviceValues, noiseSuppression: enabled }
+    setDeviceValues(next)
+    saveDeviceSettings(next)
+    const track = room?.localParticipant.getTrackPublication(Track.Source.Microphone)?.audioTrack
+    if (!track) return
+    setError('')
+    try {
+      await track.applyConstraints({ noiseSuppression: enabled, voiceIsolation: enabled })
+    } catch {
+      setError('Браузер не поддерживает изменение шумоподавления во время звонка.')
+    }
+  }
+
   return (
     <div className="call-settings-backdrop" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose() }}>
       <section className="call-settings-modal" role="dialog" aria-modal="true" aria-labelledby="call-settings-title">
@@ -433,8 +465,16 @@ function CallSettingsModal({ room, settings, onClose, onSettingsSaved }: { room:
         <div className="mt-5 space-y-4">
           <CallDeviceSelect label="Микрофон" value={deviceValues.audioInputId} devices={devices.inputs} onChange={(value) => selectDevice('audioInputId', 'audioinput', value)} />
           <CallDeviceSelect label="Наушники или динамики" value={deviceValues.audioOutputId} devices={devices.outputs} onChange={(value) => selectDevice('audioOutputId', 'audiooutput', value)} disabled={!('setSinkId' in HTMLMediaElement.prototype)} />
+          <label className="range-setting">
+            <span>Громкость микрофона <strong>{deviceValues.microphoneGain}%</strong></span>
+            <input type="range" min="0" max="200" step="5" value={deviceValues.microphoneGain} onChange={(event) => setMicrophoneGain(Number(event.target.value))} />
+          </label>
+          <label className="toggle-setting">
+            <span><strong>Шумоподавление</strong><small>Убирает постоянный фоновый шум средствами браузера</small></span>
+            <input type="checkbox" checked={deviceValues.noiseSuppression} onChange={(event) => { void setNoiseSuppression(event.target.checked) }} />
+          </label>
           <label className="field-label">Качество демонстрации экрана<select className="text-input" value={settings?.video_quality ?? 'high'} onChange={(event) => quality.mutate(event.target.value as AccountSettings['video_quality'])} disabled={quality.isPending}><option value="low">720p · 30 кадров/с</option><option value="high">1080p · 30 кадров/с</option></select></label>
-          <p className="settings-hint">Микрофон и звук переключаются сразу. Качество применяется при следующем запуске демонстрации экрана.</p>
+          <p className="settings-hint">Аудионастройки применяются сразу, без выхода из разговора. Значения громкости выше 100% могут также усилить шум. Качество применяется при следующем запуске демонстрации экрана.</p>
           {(error || quality.error) && <p className="error-note">{error || quality.error?.message}</p>}
         </div>
       </section>
@@ -450,6 +490,16 @@ async function listDevices() {
   if (!navigator.mediaDevices?.enumerateDevices) return { inputs: [], outputs: [] }
   const devices = await navigator.mediaDevices.enumerateDevices()
   return { inputs: devices.filter((device) => device.kind === 'audioinput'), outputs: devices.filter((device) => device.kind === 'audiooutput') }
+}
+
+function microphoneCaptureOptions(settings: LocalDeviceSettings) {
+  return {
+    deviceId: settings.audioInputId ? { exact: settings.audioInputId } : undefined,
+    echoCancellation: true,
+    autoGainControl: true,
+    noiseSuppression: settings.noiseSuppression,
+    voiceIsolation: settings.noiseSuppression,
+  }
 }
 
 function stopLocalMedia(room: Room) {

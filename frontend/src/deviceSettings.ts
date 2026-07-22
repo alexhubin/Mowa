@@ -3,9 +3,21 @@ const storageKey = 'mova.audio-devices.v1'
 export type LocalDeviceSettings = {
   audioInputId: string
   audioOutputId: string
+  microphoneGain: number
+  noiseSuppression: boolean
 }
 
-const defaults: LocalDeviceSettings = { audioInputId: '', audioOutputId: '' }
+export const defaultDeviceSettings: LocalDeviceSettings = {
+  audioInputId: '',
+  audioOutputId: '',
+  microphoneGain: 100,
+  noiseSuppression: true,
+}
+
+export function normalizeMicrophoneGain(value: unknown) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return defaultDeviceSettings.microphoneGain
+  return Math.min(200, Math.max(0, Math.round(value)))
+}
 
 export function loadDeviceSettings(): LocalDeviceSettings {
   try {
@@ -13,14 +25,19 @@ export function loadDeviceSettings(): LocalDeviceSettings {
     return {
       audioInputId: typeof parsed.audioInputId === 'string' ? parsed.audioInputId : '',
       audioOutputId: typeof parsed.audioOutputId === 'string' ? parsed.audioOutputId : '',
+      microphoneGain: normalizeMicrophoneGain(parsed.microphoneGain),
+      noiseSuppression: typeof parsed.noiseSuppression === 'boolean' ? parsed.noiseSuppression : true,
     }
   } catch {
-    return defaults
+    return { ...defaultDeviceSettings }
   }
 }
 
 export function saveDeviceSettings(settings: LocalDeviceSettings) {
-  localStorage.setItem(storageKey, JSON.stringify(settings))
+  localStorage.setItem(storageKey, JSON.stringify({
+    ...settings,
+    microphoneGain: normalizeMicrophoneGain(settings.microphoneGain),
+  }))
 }
 
 export async function requestAndListAudioDevices() {

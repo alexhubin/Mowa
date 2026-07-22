@@ -31,7 +31,7 @@ export function SettingsPage() {
     catch { setDeviceError('Браузер не дал доступ к аудиоустройствам. Проверьте разрешение микрофона.') }
   }
 
-  function updateDevice(key: keyof LocalDeviceSettings, value: string) {
+  function updateDevice<K extends keyof LocalDeviceSettings>(key: K, value: LocalDeviceSettings[K]) {
     const next = { ...deviceValues, [key]: value }
     setDeviceValues(next)
     saveDeviceSettings(next)
@@ -54,6 +54,15 @@ export function SettingsPage() {
           <div className="settings-fields">
             <DeviceSelect label="Микрофон" value={deviceValues.audioInputId} devices={devices.inputs} onChange={(value) => updateDevice('audioInputId', value)} />
             <DeviceSelect label="Динамики" value={deviceValues.audioOutputId} devices={devices.outputs} onChange={(value) => updateDevice('audioOutputId', value)} disabled={!('setSinkId' in HTMLMediaElement.prototype)} />
+            <label className="range-setting">
+              <span>Громкость микрофона <strong>{deviceValues.microphoneGain}%</strong></span>
+              <input type="range" min="0" max="200" step="5" value={deviceValues.microphoneGain} onChange={(event) => updateDevice('microphoneGain', Number(event.target.value))} />
+            </label>
+            <label className="toggle-setting">
+              <span><strong>Шумоподавление</strong><small>Убирает постоянный фоновый шум средствами браузера</small></span>
+              <input type="checkbox" checked={deviceValues.noiseSuppression} onChange={(event) => updateDevice('noiseSuppression', event.target.checked)} />
+            </label>
+            <p className="settings-hint">Значения выше 100% усиливают голос перед отправкой, но могут также усилить шум.</p>
             {!('setSinkId' in HTMLMediaElement.prototype) && <p className="settings-hint">Этот браузер использует системное устройство вывода.</p>}
             {deviceError && <p className="error-note">{deviceError}</p>}
           </div>
