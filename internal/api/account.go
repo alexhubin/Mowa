@@ -152,7 +152,7 @@ func (s *Server) updateSettings(w http.ResponseWriter, r *http.Request) {
 	if !decodeJSON(w, r, &input) {
 		return
 	}
-	if input.VideoQuality != "low" && input.VideoQuality != "high" {
+	if input.VideoQuality != "low" && input.VideoQuality != "high" && input.VideoQuality != "original" {
 		writeError(w, http.StatusUnprocessableEntity, "Неизвестное качество видео")
 		return
 	}

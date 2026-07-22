@@ -99,7 +99,7 @@ function QualityForm({ value, onSaved }: { value: AccountSettings['video_quality
   const [quality, setQuality] = useState(value)
   const mutation = useMutation({ mutationFn: () => api<AccountSettings>('/api/account/settings', { method: 'PUT', body: JSON.stringify({ video_quality: quality }) }), onSuccess: onSaved })
   return <form className="settings-fields" onSubmit={(event) => { event.preventDefault(); mutation.mutate() }}>
-    <label className="field-label">Качество<select className="text-input" value={quality} onChange={(event) => setQuality(event.target.value as AccountSettings['video_quality'])}><option value="low">720p · 30 кадров/с</option><option value="high">1080p · 30 кадров/с</option></select></label>
+    <label className="field-label">Качество<select className="text-input" value={quality} onChange={(event) => setQuality(event.target.value as AccountSettings['video_quality'])}><option value="low">720p · 30 кадров/с</option><option value="high">1080p · 30 кадров/с</option><option value="original">Исходное / Retina · 30 кадров/с</option></select></label>
     <button className="button-primary compact settings-save" disabled={mutation.isPending}>{mutation.isSuccess ? <><Check size={16} /> Сохранено</> : 'Сохранить'}</button>
   </form>
 }

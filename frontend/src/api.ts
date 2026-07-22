@@ -51,7 +51,7 @@ export type DirectCall = {
 }
 
 export type AccountSettings = {
-  video_quality: 'low' | 'high'
+  video_quality: 'low' | 'high' | 'original'
 }
 
 export class ApiError extends Error {

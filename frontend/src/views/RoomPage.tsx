@@ -209,7 +209,9 @@ export function RoomPage() {
       const quality = settingsQuery.data?.video_quality ?? 'high'
       const preset = quality === 'low'
         ? ScreenSharePresets.h720fps30
-        : ScreenSharePresets.h1080fps30
+        : quality === 'original'
+          ? ScreenSharePresets.original
+          : ScreenSharePresets.h1080fps30
       await call.localParticipant.setScreenShareEnabled(
         enable,
         enable ? { resolution: preset.resolution, contentHint: 'detail' } : undefined,
@@ -217,6 +219,9 @@ export function RoomPage() {
           ? {
               screenShareEncoding: preset.encoding,
               simulcast: true,
+              videoCodec: 'vp9',
+              backupCodec: true,
+              scalabilityMode: 'L3T3_KEY',
               degradationPreference: 'maintain-resolution',
             }
           : undefined,
@@ -414,7 +419,7 @@ function CallSettingsModal({ room, settings, onClose, onSettingsSaved }: { room:
         <div className="mt-5 space-y-4">
           <CallDeviceSelect label="Микрофон" value={deviceValues.audioInputId} devices={devices.inputs} onChange={(value) => selectDevice('audioInputId', 'audioinput', value)} />
           <CallDeviceSelect label="Наушники или динамики" value={deviceValues.audioOutputId} devices={devices.outputs} onChange={(value) => selectDevice('audioOutputId', 'audiooutput', value)} disabled={!('setSinkId' in HTMLMediaElement.prototype)} />
-          <label className="field-label">Качество демонстрации экрана<select className="text-input" value={settings?.video_quality ?? 'high'} onChange={(event) => quality.mutate(event.target.value as AccountSettings['video_quality'])} disabled={quality.isPending}><option value="low">720p · 30 кадров/с</option><option value="high">1080p · 30 кадров/с</option></select></label>
+          <label className="field-label">Качество демонстрации экрана<select className="text-input" value={settings?.video_quality ?? 'high'} onChange={(event) => quality.mutate(event.target.value as AccountSettings['video_quality'])} disabled={quality.isPending}><option value="low">720p · 30 кадров/с</option><option value="high">1080p · 30 кадров/с</option><option value="original">Исходное / Retina · 30 кадров/с</option></select></label>
           <p className="settings-hint">Микрофон и звук переключаются сразу. Качество применяется при следующем запуске демонстрации экрана.</p>
           {(error || quality.error) && <p className="error-note">{error || quality.error?.message}</p>}
         </div>
