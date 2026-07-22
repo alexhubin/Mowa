@@ -26,10 +26,10 @@ func TestOpenRunsPostgresMigrations(t *testing.T) {
 	}
 
 	var count int
-	if err := db.QueryRow("SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('users', 'user_settings', 'sessions', 'rooms', 'room_members', 'friend_requests', 'friendships', 'direct_calls')").Scan(&count); err != nil {
+	if err := db.QueryRow("SELECT count(*) FROM information_schema.tables WHERE table_schema = 'public' AND table_name IN ('users', 'user_settings', 'sessions', 'rooms', 'room_members', 'friend_requests', 'friendships', 'direct_calls', 'passkey_users', 'passkeys', 'passkey_ceremonies')").Scan(&count); err != nil {
 		t.Fatalf("query schema: %v", err)
 	}
-	if count != 8 {
-		t.Fatalf("migrated tables = %d, want 8", count)
+	if count != 11 {
+		t.Fatalf("migrated tables = %d, want 11", count)
 	}
 }

@@ -32,9 +32,15 @@ func main() {
 	}
 	defer db.Close()
 
+	apiServer, err := api.New(db, cfg)
+	if err != nil {
+		slog.Error("configure API", "error", err)
+		os.Exit(1)
+	}
+
 	server := &http.Server{
 		Addr:              cfg.HTTPAddr,
-		Handler:           api.New(db, cfg).Handler(),
+		Handler:           apiServer.Handler(),
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       15 * time.Second,
 		WriteTimeout:      20 * time.Second,

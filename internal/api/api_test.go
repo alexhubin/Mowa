@@ -157,6 +157,116 @@ func TestProtectedEndpointsAndOrigin(t *testing.T) {
 	response.Body.Close()
 }
 
+func TestPasskeyCeremonyAndManagementEndpoints(t *testing.T) {
+	server, client, db := newTestServer(t)
+	user := provisionTestUser(t, db, "passkey@example.com", "passkey_user", "very-secure-password", "Passkey User", true)
+
+	response := doJSON(t, client, http.MethodPost, server.URL+"/api/auth/login", map[string]string{
+		"email": "passkey@example.com", "password": "very-secure-password",
+	})
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("password login status = %d, body = %s", response.StatusCode, responseBody(t, response))
+	}
+	response.Body.Close()
+
+	response = doJSON(t, client, http.MethodPost, server.URL+"/api/account/passkeys/register/begin", map[string]string{"name": "MacBook"})
+	if response.StatusCode != http.StatusForbidden {
+		t.Fatalf("passkey before password change status = %d", response.StatusCode)
+	}
+	response.Body.Close()
+
+	response = doJSON(t, client, http.MethodPut, server.URL+"/api/auth/first-password", map[string]string{"new_password": "new-secure-password"})
+	if response.StatusCode != http.StatusNoContent {
+		t.Fatalf("first password status = %d, body = %s", response.StatusCode, responseBody(t, response))
+	}
+	response.Body.Close()
+
+	response = doJSON(t, client, http.MethodGet, server.URL+"/api/account/passkeys", nil)
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("empty passkeys status = %d, body = %s", response.StatusCode, responseBody(t, response))
+	}
+	var empty []passkeyResponse
+	decodeResponse(t, response, &empty)
+	if len(empty) != 0 {
+		t.Fatalf("empty passkeys = %+v", empty)
+	}
+
+	response = doJSON(t, client, http.MethodPost, server.URL+"/api/account/passkeys/register/begin", map[string]string{"name": "MacBook"})
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("begin registration status = %d, body = %s", response.StatusCode, responseBody(t, response))
+	}
+	var registrationOptions struct {
+		PublicKey struct {
+			Challenge string `json:"challenge"`
+			RP        struct {
+				ID string `json:"id"`
+			} `json:"rp"`
+			AuthenticatorSelection struct {
+				ResidentKey      string `json:"residentKey"`
+				UserVerification string `json:"userVerification"`
+			} `json:"authenticatorSelection"`
+		} `json:"publicKey"`
+	}
+	decodeResponse(t, response, &registrationOptions)
+	if registrationOptions.PublicKey.Challenge == "" || registrationOptions.PublicKey.RP.ID != "localhost" ||
+		registrationOptions.PublicKey.AuthenticatorSelection.ResidentKey != "required" ||
+		registrationOptions.PublicKey.AuthenticatorSelection.UserVerification != "required" {
+		t.Fatalf("unexpected registration options: %+v", registrationOptions)
+	}
+
+	var ceremonyName string
+	if err := db.QueryRowContext(context.Background(), `SELECT name FROM passkey_ceremonies WHERE user_id = $1`, user.ID).Scan(&ceremonyName); err != nil {
+		t.Fatalf("read registration ceremony: %v", err)
+	}
+	if ceremonyName != "MacBook" {
+		t.Fatalf("ceremony name = %q", ceremonyName)
+	}
+
+	response = doJSON(t, client, http.MethodPost, server.URL+"/api/account/passkeys/register/finish", map[string]string{})
+	if response.StatusCode != http.StatusBadRequest {
+		t.Fatalf("invalid registration finish status = %d, body = %s", response.StatusCode, responseBody(t, response))
+	}
+	response.Body.Close()
+	response = doJSON(t, client, http.MethodPost, server.URL+"/api/account/passkeys/register/finish", map[string]string{})
+	if response.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("replayed registration finish status = %d", response.StatusCode)
+	}
+	response.Body.Close()
+
+	if _, err := db.ExecContext(context.Background(), `
+		INSERT INTO passkeys (id, user_id, credential_id, name, credential)
+		VALUES ('test-passkey', $1, decode('010203', 'hex'), 'MacBook', '{}'::jsonb)`, user.ID); err != nil {
+		t.Fatalf("insert passkey: %v", err)
+	}
+	response = doJSON(t, client, http.MethodGet, server.URL+"/api/account/passkeys", nil)
+	var items []passkeyResponse
+	decodeResponse(t, response, &items)
+	if len(items) != 1 || items[0].ID != "test-passkey" || items[0].Name != "MacBook" {
+		t.Fatalf("listed passkeys = %+v", items)
+	}
+	response = doJSON(t, client, http.MethodDelete, server.URL+"/api/account/passkeys/test-passkey", nil)
+	if response.StatusCode != http.StatusNoContent {
+		t.Fatalf("delete passkey status = %d, body = %s", response.StatusCode, responseBody(t, response))
+	}
+	response.Body.Close()
+
+	response = doJSON(t, client, http.MethodPost, server.URL+"/api/auth/passkey/login/begin", nil)
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("begin passkey login status = %d, body = %s", response.StatusCode, responseBody(t, response))
+	}
+	var loginOptions struct {
+		PublicKey struct {
+			Challenge        string `json:"challenge"`
+			RPID             string `json:"rpId"`
+			UserVerification string `json:"userVerification"`
+		} `json:"publicKey"`
+	}
+	decodeResponse(t, response, &loginOptions)
+	if loginOptions.PublicKey.Challenge == "" || loginOptions.PublicKey.RPID != "localhost" || loginOptions.PublicKey.UserVerification != "required" {
+		t.Fatalf("unexpected login options: %+v", loginOptions)
+	}
+}
+
 func newTestServer(t *testing.T) (*httptest.Server, *http.Client, *sql.DB) {
 	t.Helper()
 	dsn := os.Getenv("TEST_DATABASE_URL")
@@ -177,7 +287,13 @@ func newTestServer(t *testing.T) (*httptest.Server, *http.Client, *sql.DB) {
 		LiveKitURL: "ws://livekit.test:7880", LiveKitAPIKey: "devkey",
 		LiveKitAPISecret: "secretsecretsecretsecretsecretsecret", LiveKitTokenTTL: 10 * time.Minute,
 	}
-	server := httptest.NewServer(New(db, cfg).Handler())
+	cfg.WebAuthnRPID = "localhost"
+	cfg.WebAuthnRPName = "Mowa Test"
+	apiServer, err := New(db, cfg)
+	if err != nil {
+		t.Fatalf("create API server: %v", err)
+	}
+	server := httptest.NewServer(apiServer.Handler())
 	t.Cleanup(server.Close)
 	return server, newHTTPClient(t), db
 }

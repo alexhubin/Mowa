@@ -1,7 +1,9 @@
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from '@tanstack/react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { KeyRound } from 'lucide-react'
 import { api, type User } from '../api'
+import { loginWithPasskey, passkeysSupported } from '../passkeys'
 
 export function AuthPage() {
   const navigate = useNavigate()
@@ -9,16 +11,19 @@ export function AuthPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
 
+  async function completeLogin(user: User) {
+    queryClient.setQueryData(['me'], user)
+    const next = new URLSearchParams(window.location.search).get('next')
+    if (user.must_change_password) await navigate({ to: '/first-password' })
+    else if (next?.startsWith('/') && !next.startsWith('//')) window.location.assign(next)
+    else await navigate({ to: '/' })
+  }
+
   const mutation = useMutation({
     mutationFn: () => api<User>('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }),
-    onSuccess: async (user) => {
-      queryClient.setQueryData(['me'], user)
-      const next = new URLSearchParams(window.location.search).get('next')
-      if (user.must_change_password) await navigate({ to: '/first-password' })
-      else if (next?.startsWith('/') && !next.startsWith('//')) window.location.assign(next)
-      else await navigate({ to: '/' })
-    },
+    onSuccess: completeLogin,
   })
+  const passkey = useMutation({ mutationFn: loginWithPasskey, onSuccess: completeLogin })
 
   function submit(event: FormEvent) {
     event.preventDefault()
@@ -36,6 +41,13 @@ export function AuthPage() {
           {mutation.error && <p className="error-note" role="alert">{mutation.error.message}</p>}
           <button className="button-primary auth-submit" disabled={mutation.isPending}>{mutation.isPending ? 'Минутку…' : 'Войти'}</button>
         </form>
+        {passkeysSupported() && <>
+          <div className="auth-separator"><span>или</span></div>
+          <button type="button" className="button-secondary auth-passkey" onClick={() => passkey.mutate()} disabled={passkey.isPending || mutation.isPending}>
+            <KeyRound size={18} /> {passkey.isPending ? 'Подтвердите на устройстве…' : 'Войти по passkey'}
+          </button>
+          {passkey.error && <p className="error-note auth-passkey-error" role="alert">{passkey.error.message}</p>}
+        </>}
         <p className="auth-footnote">Аккаунты создаёт администратор Mowa</p>
       </section>
     </main>

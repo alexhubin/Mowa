@@ -20,6 +20,8 @@ import (
 	"github.com/alexhubin/Mova/internal/media"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
+	"github.com/go-webauthn/webauthn/protocol"
+	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5/pgconn"
 )
@@ -42,18 +44,32 @@ type Server struct {
 	newID      func() string
 	newInvite  func() (string, error)
 	callEvents *callEventBroker
+	webAuthn   *webauthn.WebAuthn
 }
 
 type contextKey string
 
 const userContextKey contextKey = "user"
 
-func New(db *sql.DB, cfg config.Config) *Server {
+func New(db *sql.DB, cfg config.Config) (*Server, error) {
+	webAuthn, err := webauthn.New(&webauthn.Config{
+		RPID:          cfg.WebAuthnRPID,
+		RPDisplayName: cfg.WebAuthnRPName,
+		RPOrigins:     []string{cfg.AppOrigin},
+		AuthenticatorSelection: protocol.AuthenticatorSelection{
+			UserVerification: protocol.VerificationRequired,
+		},
+		AttestationPreference: protocol.PreferNoAttestation,
+	})
+	if err != nil {
+		return nil, err
+	}
 	return &Server{
 		db:         db,
 		queries:    dbgen.New(db),
 		cfg:        cfg,
 		callEvents: newCallEventBroker(),
+		webAuthn:   webAuthn,
 		issuer:     media.TokenIssuer{APIKey: cfg.LiveKitAPIKey, APISecret: cfg.LiveKitAPISecret, TTL: cfg.LiveKitTokenTTL},
 		now:        time.Now,
 		newID:      uuid.NewString,
@@ -64,7 +80,7 @@ func New(db *sql.DB, cfg config.Config) *Server {
 			}
 			return base64.RawURLEncoding.EncodeToString(value), nil
 		},
-	}
+	}, nil
 }
 
 func (s *Server) Handler() http.Handler {
@@ -79,6 +95,8 @@ func (s *Server) Handler() http.Handler {
 	r.Get("/api/health", s.health)
 	r.Route("/api/auth", func(r chi.Router) {
 		r.Post("/login", s.login)
+		r.Post("/passkey/login/begin", s.beginPasskeyLogin)
+		r.Post("/passkey/login/finish", s.finishPasskeyLogin)
 		r.With(s.requireUser).Post("/logout", s.logout)
 		r.With(s.requireUser).Get("/me", s.me)
 		r.With(s.requireUser).Put("/first-password", s.completeFirstPassword)
@@ -88,6 +106,10 @@ func (s *Server) Handler() http.Handler {
 		r.Use(s.requirePasswordChanged)
 		r.Patch("/api/account/profile", s.updateProfile)
 		r.Put("/api/account/password", s.updatePassword)
+		r.Get("/api/account/passkeys", s.listPasskeys)
+		r.Post("/api/account/passkeys/register/begin", s.beginPasskeyRegistration)
+		r.Post("/api/account/passkeys/register/finish", s.finishPasskeyRegistration)
+		r.Delete("/api/account/passkeys/{passkeyID}", s.deletePasskey)
 		r.Get("/api/account/settings", s.getSettings)
 		r.Put("/api/account/settings", s.updateSettings)
 		r.Get("/api/users/search", s.searchUsers)

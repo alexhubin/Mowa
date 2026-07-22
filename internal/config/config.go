@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"net/url"
 	"os"
 	"strconv"
 	"time"
@@ -16,6 +17,8 @@ type Config struct {
 	LiveKitAPIKey    string
 	LiveKitAPISecret string
 	LiveKitTokenTTL  time.Duration
+	WebAuthnRPID     string
+	WebAuthnRPName   string
 }
 
 func Load() (Config, error) {
@@ -27,7 +30,13 @@ func Load() (Config, error) {
 		LiveKitAPIKey:    env("LIVEKIT_API_KEY", "devkey"),
 		LiveKitAPISecret: env("LIVEKIT_API_SECRET", "secretsecretsecretsecretsecretsecret"),
 		LiveKitTokenTTL:  10 * time.Minute,
+		WebAuthnRPName:   env("WEBAUTHN_RP_NAME", "Mowa"),
 	}
+	appURL, err := url.Parse(cfg.AppOrigin)
+	if err != nil || appURL.Hostname() == "" {
+		return Config{}, fmt.Errorf("APP_ORIGIN must be an absolute URL")
+	}
+	cfg.WebAuthnRPID = env("WEBAUTHN_RP_ID", appURL.Hostname())
 
 	secure, err := strconv.ParseBool(env("COOKIE_SECURE", "false"))
 	if err != nil {

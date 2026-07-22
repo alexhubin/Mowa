@@ -6,6 +6,7 @@ package dbgen
 
 import (
 	"database/sql"
+	"encoding/json"
 	"time"
 )
 
@@ -30,6 +31,32 @@ type FriendRequest struct {
 type Friendship struct {
 	UserID    string    `json:"user_id"`
 	FriendID  string    `json:"friend_id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type Passkey struct {
+	ID           string          `json:"id"`
+	UserID       string          `json:"user_id"`
+	CredentialID []byte          `json:"credential_id"`
+	Name         string          `json:"name"`
+	Credential   json.RawMessage `json:"credential"`
+	CreatedAt    time.Time       `json:"created_at"`
+	LastUsedAt   sql.NullTime    `json:"last_used_at"`
+}
+
+type PasskeyCeremony struct {
+	TokenHash   string          `json:"token_hash"`
+	UserID      sql.NullString  `json:"user_id"`
+	Kind        string          `json:"kind"`
+	Name        string          `json:"name"`
+	SessionData json.RawMessage `json:"session_data"`
+	ExpiresAt   time.Time       `json:"expires_at"`
+	CreatedAt   time.Time       `json:"created_at"`
+}
+
+type PasskeyUser struct {
+	UserID    string    `json:"user_id"`
+	Handle    []byte    `json:"handle"`
 	CreatedAt time.Time `json:"created_at"`
 }
 

@@ -125,6 +125,10 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 .auth-form { display: grid; gap: 12px; }
 .auth-form .text-input { height: 48px; padding-inline: 18px; }
 .auth-submit { width: 100%; min-height: 50px; margin-top: 2px; border: 0; font-size: 15px; }
+.auth-separator { display: flex; align-items: center; gap: 12px; margin: 17px 0; color: var(--faint); font-size: 11px; text-transform: uppercase; }
+.auth-separator::before, .auth-separator::after { height: 1px; flex: 1; background: var(--border); content: ""; }
+.auth-passkey { width: 100%; }
+.auth-passkey-error { margin-top: 12px; }
 .auth-footnote { margin: 18px 0 0; color: var(--faint); font-size: 12px; text-align: center; }
 .first-password-title { margin: 16px 0 6px; color: var(--bright); font-size: 20px; font-weight: 800; letter-spacing: -.02em; }
 
@@ -196,6 +200,18 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 .toggle-setting input::after { position: absolute; top: 3px; left: 3px; width: 14px; height: 14px; border-radius: 50%; background: var(--faint); content: ""; transition: transform .15s, background .15s; }
 .toggle-setting input:checked { border-color: var(--accent); background: var(--accent); }
 .toggle-setting input:checked::after { background: var(--accent-ink); transform: translateX(18px); }
+.passkey-intro { display: flex; align-items: flex-start; gap: 11px; margin: -4px 0 18px; color: var(--muted); }
+.passkey-intro svg { flex: none; margin-top: 1px; color: var(--accent); }
+.passkey-intro p { margin: 0; font-size: 13px; line-height: 1.5; }
+.passkey-create { display: flex; gap: 10px; }
+.passkey-create .text-input { min-width: 0; flex: 1; }
+.passkey-list { display: grid; gap: 8px; margin-top: 14px; }
+.passkey-row { display: flex; align-items: center; gap: 11px; border: 1px solid var(--border); border-radius: 15px; padding: 10px 11px; background: var(--field); }
+.passkey-icon { display: grid; width: 36px; height: 36px; flex: none; place-items: center; border-radius: 50%; color: var(--accent); background: var(--tint); }
+.passkey-row > span:nth-child(2) { min-width: 0; flex: 1; }
+.passkey-row strong, .passkey-row small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.passkey-row strong { color: var(--bright); font-size: 13px; }
+.passkey-row small { margin-top: 3px; color: var(--muted); font-size: 11.5px; }
 
 .room-page { display: flex; height: 100dvh; min-height: 620px; flex-direction: column; gap: 14px; padding: 18px 22px; background: var(--bg); }
 .room-topbar { display: flex; min-height: 36px; align-items: center; gap: 12px; flex-wrap: wrap; }
@@ -267,6 +283,7 @@ button:disabled { cursor: not-allowed; opacity: .48; }
   .friend-call span { display: none; }
   .settings-card { padding: 22px 18px; }
   .settings-card-heading { align-items: flex-start; flex-direction: column; }
+  .passkey-create { align-items: stretch; flex-direction: column; }
   .room-page { height: auto; min-height: 100dvh; padding: 14px 12px 100px; }
   .room-topbar h1 { order: 5; width: 100%; max-width: none; margin-left: 0; }
   .room-topbar-spacer { display: none; }

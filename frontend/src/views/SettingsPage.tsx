@@ -1,9 +1,10 @@
 import { useEffect, useState, type FormEvent } from 'react'
 import { Navigate } from '@tanstack/react-router'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, SlidersHorizontal } from 'lucide-react'
+import { Check, KeyRound, Plus, SlidersHorizontal, Trash2 } from 'lucide-react'
 import { api, currentUser, type AccountSettings, type User } from '../api'
 import { loadDeviceSettings, requestAndListAudioDevices, saveDeviceSettings, type LocalDeviceSettings } from '../deviceSettings'
+import { passkeysSupported, registerPasskey, type Passkey } from '../passkeys'
 import { initials } from '../utils'
 
 type Devices = { inputs: MediaDeviceInfo[]; outputs: MediaDeviceInfo[] }
@@ -49,6 +50,8 @@ export function SettingsPage() {
           <PasswordForm />
         </section>
 
+        <PasskeySettings />
+
         <section className="settings-card">
           <div className="settings-card-heading"><h2>Аудио</h2><button type="button" className="button-secondary compact" onClick={allowDevices}><SlidersHorizontal size={16} /> Обновить устройства</button></div>
           <div className="settings-fields">
@@ -75,6 +78,49 @@ export function SettingsPage() {
       </div>
     </main>
   )
+}
+
+function PasskeySettings() {
+  const queryClient = useQueryClient()
+  const [name, setName] = useState('Мой passkey')
+  const passkeys = useQuery({ queryKey: ['passkeys'], queryFn: () => api<Passkey[]>('/api/account/passkeys') })
+  const create = useMutation({
+    mutationFn: () => registerPasskey(name),
+    onSuccess: (passkey) => {
+      queryClient.setQueryData<Passkey[]>(['passkeys'], (current = []) => [passkey, ...current])
+      setName('Мой passkey')
+    },
+  })
+  const remove = useMutation({
+    mutationFn: (id: string) => api<void>(`/api/account/passkeys/${id}`, { method: 'DELETE' }),
+    onSuccess: (_, id) => queryClient.setQueryData<Passkey[]>(['passkeys'], (current = []) => current.filter((item) => item.id !== id)),
+  })
+  const supported = passkeysSupported()
+
+  return <section className="settings-card">
+    <h2>Вход по passkey</h2>
+    <div className="passkey-intro"><KeyRound size={20} /><p>Входите без пароля через Touch ID, Face ID, Windows Hello или ключ безопасности.</p></div>
+    {supported ? <>
+      <form className="passkey-create" onSubmit={(event) => { event.preventDefault(); create.mutate() }}>
+        <input className="text-input" value={name} onChange={(event) => setName(event.target.value)} maxLength={50} required aria-label="Название passkey" placeholder="Например, MacBook" />
+        <button className="button-primary compact" disabled={create.isPending || !name.trim()}><Plus size={16} /> {create.isPending ? 'Подтвердите…' : 'Добавить'}</button>
+      </form>
+      {(passkeys.error || create.error || remove.error) && <p className="error-note">{passkeys.error?.message || create.error?.message || remove.error?.message}</p>}
+      <div className="passkey-list">
+        {passkeys.isLoading && <div className="skeleton h-16" />}
+        {passkeys.data?.map((passkey) => <div className="passkey-row" key={passkey.id}>
+          <span className="passkey-icon"><KeyRound size={17} /></span>
+          <span><strong>{passkey.name}</strong><small>{passkey.last_used_at ? `Последний вход: ${formatPasskeyDate(passkey.last_used_at)}` : `Добавлен: ${formatPasskeyDate(passkey.created_at)}`}</small></span>
+          <button type="button" className="mini-action" aria-label={`Удалить ${passkey.name}`} title="Удалить passkey" disabled={remove.isPending} onClick={() => { if (window.confirm(`Удалить passkey «${passkey.name}»?`)) remove.mutate(passkey.id) }}><Trash2 size={16} /></button>
+        </div>)}
+        {!passkeys.isLoading && passkeys.data?.length === 0 && <p className="settings-hint">Passkey пока не добавлены. Пароль останется доступен как резервный способ входа.</p>}
+      </div>
+    </> : <p className="settings-hint">Passkey недоступен: нужен современный браузер и защищённое HTTPS-соединение.</p>}
+  </section>
+}
+
+function formatPasskeyDate(value: string) {
+  return new Intl.DateTimeFormat('ru-RU', { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
 }
 
 function ProfileForm({ user, onSaved }: { user: User; onSaved: (user: User) => void }) {
