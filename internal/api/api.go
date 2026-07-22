@@ -10,7 +10,6 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
-	"net/mail"
 	"regexp"
 	"strings"
 	"time"
@@ -79,13 +78,14 @@ func (s *Server) Handler() http.Handler {
 
 	r.Get("/api/health", s.health)
 	r.Route("/api/auth", func(r chi.Router) {
-		r.Post("/register", s.register)
 		r.Post("/login", s.login)
 		r.With(s.requireUser).Post("/logout", s.logout)
 		r.With(s.requireUser).Get("/me", s.me)
+		r.With(s.requireUser).Put("/first-password", s.completeFirstPassword)
 	})
 	r.Group(func(r chi.Router) {
 		r.Use(s.requireUser)
+		r.Use(s.requirePasswordChanged)
 		r.Patch("/api/account/profile", s.updateProfile)
 		r.Put("/api/account/password", s.updatePassword)
 		r.Get("/api/account/settings", s.getSettings)
@@ -176,82 +176,27 @@ func (s *Server) requireUser(next http.Handler) http.Handler {
 	})
 }
 
+func (s *Server) requirePasswordChanged(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if currentUser(r).MustChangePassword {
+			writeError(w, http.StatusForbidden, "Сначала измените временный пароль")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
 type authRequest struct {
-	Email       string `json:"email"`
-	Password    string `json:"password"`
-	DisplayName string `json:"display_name"`
-	Username    string `json:"username"`
+	Email    string `json:"email"`
+	Password string `json:"password"`
 }
 
 type userResponse struct {
-	ID          string `json:"id"`
-	Username    string `json:"username"`
-	Email       string `json:"email"`
-	DisplayName string `json:"display_name"`
-}
-
-func (s *Server) register(w http.ResponseWriter, r *http.Request) {
-	var input authRequest
-	if !decodeJSON(w, r, &input) {
-		return
-	}
-	input.Email = strings.ToLower(strings.TrimSpace(input.Email))
-	input.DisplayName = strings.TrimSpace(input.DisplayName)
-	input.Username = normalizeUsername(input.Username)
-	address, err := mail.ParseAddress(input.Email)
-	if err != nil || address.Address != input.Email || len(input.Email) > 254 {
-		writeError(w, http.StatusUnprocessableEntity, "Введите корректный email")
-		return
-	}
-	if len([]rune(input.DisplayName)) < 2 || len([]rune(input.DisplayName)) > 40 {
-		writeError(w, http.StatusUnprocessableEntity, "Имя должно содержать от 2 до 40 символов")
-		return
-	}
-	if !usernamePattern.MatchString(input.Username) {
-		writeError(w, http.StatusUnprocessableEntity, "Username: 3–32 символа, только латинские буквы, цифры и _")
-		return
-	}
-	hash, err := auth.HashPassword(input.Password)
-	if err != nil {
-		writeError(w, http.StatusUnprocessableEntity, "Пароль должен содержать от 8 до 128 символов")
-		return
-	}
-	tx, err := s.db.BeginTx(r.Context(), nil)
-	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Не удалось создать аккаунт")
-		return
-	}
-	defer tx.Rollback()
-	queries := s.queries.WithTx(tx)
-	now := s.now()
-	user, err := queries.CreateUser(r.Context(), dbgen.CreateUserParams{
-		ID: s.newID(), Username: input.Username, Email: input.Email, DisplayName: input.DisplayName, PasswordHash: hash, CreatedAt: now,
-	})
-	if err != nil {
-		if isUniqueViolation(err) {
-			writeError(w, http.StatusConflict, "Email или username уже занят")
-			return
-		}
-		slog.Error("create user", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось создать аккаунт")
-		return
-	}
-	if _, err := queries.CreateUserSettings(r.Context(), dbgen.CreateUserSettingsParams{UserID: user.ID, UpdatedAt: now}); err != nil {
-		slog.Error("create user settings", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось создать аккаунт")
-		return
-	}
-	if err := tx.Commit(); err != nil {
-		slog.Error("commit user", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось создать аккаунт")
-		return
-	}
-	if err := s.startSession(w, r, user.ID); err != nil {
-		slog.Error("create session", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось начать сессию")
-		return
-	}
-	writeJSON(w, http.StatusCreated, publicUser(user))
+	ID                 string `json:"id"`
+	Username           string `json:"username"`
+	Email              string `json:"email"`
+	DisplayName        string `json:"display_name"`
+	MustChangePassword bool   `json:"must_change_password"`
 }
 
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {
@@ -465,7 +410,7 @@ func currentUser(r *http.Request) dbgen.User {
 }
 
 func publicUser(user dbgen.User) userResponse {
-	return userResponse{ID: user.ID, Username: user.Username, Email: user.Email, DisplayName: user.DisplayName}
+	return userResponse{ID: user.ID, Username: user.Username, Email: user.Email, DisplayName: user.DisplayName, MustChangePassword: user.MustChangePassword}
 }
 
 func publicRoom(room dbgen.Room) roomResponse {

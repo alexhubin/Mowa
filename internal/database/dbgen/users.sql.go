@@ -13,7 +13,7 @@ import (
 const createUser = `-- name: CreateUser :one
 INSERT INTO users (id, username, email, display_name, password_hash, created_at, updated_at)
 VALUES ($1, $2, $3, $4, $5, $6, $6)
-RETURNING id, username, email, display_name, password_hash, created_at, updated_at
+RETURNING id, username, email, display_name, password_hash, created_at, updated_at, must_change_password
 `
 
 type CreateUserParams struct {
@@ -43,6 +43,7 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.PasswordHash,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.MustChangePassword,
 	)
 	return i, err
 }
@@ -66,7 +67,7 @@ func (q *Queries) CreateUserSettings(ctx context.Context, arg CreateUserSettings
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, username, email, display_name, password_hash, created_at, updated_at FROM users WHERE lower(email) = lower($1) LIMIT 1
+SELECT id, username, email, display_name, password_hash, created_at, updated_at, must_change_password FROM users WHERE lower(email) = lower($1) LIMIT 1
 `
 
 func (q *Queries) GetUserByEmail(ctx context.Context, lower string) (User, error) {
@@ -80,12 +81,13 @@ func (q *Queries) GetUserByEmail(ctx context.Context, lower string) (User, error
 		&i.PasswordHash,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.MustChangePassword,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, username, email, display_name, password_hash, created_at, updated_at FROM users WHERE id = $1 LIMIT 1
+SELECT id, username, email, display_name, password_hash, created_at, updated_at, must_change_password FROM users WHERE id = $1 LIMIT 1
 `
 
 func (q *Queries) GetUserByID(ctx context.Context, id string) (User, error) {
@@ -99,12 +101,13 @@ func (q *Queries) GetUserByID(ctx context.Context, id string) (User, error) {
 		&i.PasswordHash,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.MustChangePassword,
 	)
 	return i, err
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, username, email, display_name, password_hash, created_at, updated_at FROM users WHERE lower(username) = lower($1) LIMIT 1
+SELECT id, username, email, display_name, password_hash, created_at, updated_at, must_change_password FROM users WHERE lower(username) = lower($1) LIMIT 1
 `
 
 func (q *Queries) GetUserByUsername(ctx context.Context, lower string) (User, error) {
@@ -118,6 +121,7 @@ func (q *Queries) GetUserByUsername(ctx context.Context, lower string) (User, er
 		&i.PasswordHash,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.MustChangePassword,
 	)
 	return i, err
 }
@@ -202,7 +206,9 @@ func (q *Queries) SearchUsers(ctx context.Context, arg SearchUsersParams) ([]Sea
 }
 
 const updatePassword = `-- name: UpdatePassword :exec
-UPDATE users SET password_hash = $2, updated_at = $3 WHERE id = $1
+UPDATE users
+SET password_hash = $2, must_change_password = FALSE, updated_at = $3
+WHERE id = $1
 `
 
 type UpdatePasswordParams struct {
@@ -220,7 +226,7 @@ const updateProfile = `-- name: UpdateProfile :one
 UPDATE users
 SET username = $2, display_name = $3, updated_at = $4
 WHERE id = $1
-RETURNING id, username, email, display_name, password_hash, created_at, updated_at
+RETURNING id, username, email, display_name, password_hash, created_at, updated_at, must_change_password
 `
 
 type UpdateProfileParams struct {
@@ -246,6 +252,7 @@ func (q *Queries) UpdateProfile(ctx context.Context, arg UpdateProfileParams) (U
 		&i.PasswordHash,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.MustChangePassword,
 	)
 	return i, err
 }

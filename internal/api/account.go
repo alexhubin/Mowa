@@ -21,6 +21,10 @@ type passwordRequest struct {
 	NewPassword     string `json:"new_password"`
 }
 
+type firstPasswordRequest struct {
+	NewPassword string `json:"new_password"`
+}
+
 type settingsRequest struct {
 	VideoQuality string `json:"video_quality"`
 }
@@ -70,40 +74,63 @@ func (s *Server) updatePassword(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusUnauthorized, "Текущий пароль указан неверно")
 		return
 	}
-	hash, err := auth.HashPassword(input.NewPassword)
+	if !s.changePassword(w, r, user, input.NewPassword) {
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) completeFirstPassword(w http.ResponseWriter, r *http.Request) {
+	user := currentUser(r)
+	if !user.MustChangePassword {
+		writeError(w, http.StatusConflict, "Временный пароль уже был заменён")
+		return
+	}
+	var input firstPasswordRequest
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	if !s.changePassword(w, r, user, input.NewPassword) {
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (s *Server) changePassword(w http.ResponseWriter, r *http.Request, user dbgen.User, newPassword string) bool {
+	hash, err := auth.HashPassword(newPassword)
 	if err != nil {
 		writeError(w, http.StatusUnprocessableEntity, "Новый пароль должен содержать от 8 до 128 символов")
-		return
+		return false
 	}
 
 	tx, err := s.db.BeginTx(r.Context(), nil)
 	if err != nil {
 		writeError(w, http.StatusInternalServerError, "Не удалось изменить пароль")
-		return
+		return false
 	}
 	defer tx.Rollback()
 	queries := s.queries.WithTx(tx)
 	if err := queries.UpdatePassword(r.Context(), dbgen.UpdatePasswordParams{ID: user.ID, PasswordHash: hash, UpdatedAt: s.now()}); err != nil {
 		slog.Error("update password", "error", err)
 		writeError(w, http.StatusInternalServerError, "Не удалось изменить пароль")
-		return
+		return false
 	}
 	if err := queries.DeleteUserSessions(r.Context(), user.ID); err != nil {
 		slog.Error("delete sessions after password change", "error", err)
 		writeError(w, http.StatusInternalServerError, "Не удалось изменить пароль")
-		return
+		return false
 	}
 	if err := tx.Commit(); err != nil {
 		slog.Error("commit password", "error", err)
 		writeError(w, http.StatusInternalServerError, "Не удалось изменить пароль")
-		return
+		return false
 	}
 	if err := s.startSession(w, r, user.ID); err != nil {
 		slog.Error("restart session", "error", err)
 		writeError(w, http.StatusInternalServerError, "Пароль изменён, но не удалось обновить сессию")
-		return
+		return false
 	}
-	w.WriteHeader(http.StatusNoContent)
+	return true
 }
 
 func (s *Server) getSettings(w http.ResponseWriter, r *http.Request) {

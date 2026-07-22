@@ -51,7 +51,9 @@ WHERE id = $1
 RETURNING *;
 
 -- name: UpdatePassword :exec
-UPDATE users SET password_hash = $2, updated_at = $3 WHERE id = $1;
+UPDATE users
+SET password_hash = $2, must_change_password = FALSE, updated_at = $3
+WHERE id = $1;
 
 -- name: GetUserSettings :one
 SELECT * FROM user_settings WHERE user_id = $1;

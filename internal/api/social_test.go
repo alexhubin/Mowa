@@ -6,25 +6,26 @@ import (
 )
 
 func TestPersistentAccountsFriendsAndDirectCall(t *testing.T) {
-	server, annaClient := newTestServer(t)
+	server, annaClient, db := newTestServer(t)
 	borisClient := newHTTPClient(t)
+	provisionTestUser(t, db, "anna@example.com", "anna", "very-secure-password", "Анна", false)
+	boris := provisionTestUser(t, db, "boris@example.com", "boris", "another-secure-password", "Борис", false)
 
-	response := doJSON(t, annaClient, http.MethodPost, server.URL+"/api/auth/register", map[string]string{
-		"email": "anna@example.com", "username": "anna", "password": "very-secure-password", "display_name": "Анна",
+	response := doJSON(t, annaClient, http.MethodPost, server.URL+"/api/auth/login", map[string]string{
+		"email": "anna@example.com", "password": "very-secure-password",
 	})
-	if response.StatusCode != http.StatusCreated {
-		t.Fatalf("register Anna status = %d, body = %s", response.StatusCode, responseBody(t, response))
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("login Anna status = %d, body = %s", response.StatusCode, responseBody(t, response))
 	}
 	response.Body.Close()
 
-	response = doJSON(t, borisClient, http.MethodPost, server.URL+"/api/auth/register", map[string]string{
-		"email": "boris@example.com", "username": "boris", "password": "another-secure-password", "display_name": "Борис",
+	response = doJSON(t, borisClient, http.MethodPost, server.URL+"/api/auth/login", map[string]string{
+		"email": "boris@example.com", "password": "another-secure-password",
 	})
-	if response.StatusCode != http.StatusCreated {
-		t.Fatalf("register Boris status = %d, body = %s", response.StatusCode, responseBody(t, response))
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("login Boris status = %d, body = %s", response.StatusCode, responseBody(t, response))
 	}
-	var boris userResponse
-	decodeResponse(t, response, &boris)
+	response.Body.Close()
 
 	response = doJSON(t, annaClient, http.MethodPost, server.URL+"/api/friend-requests", map[string]string{"username": "boris"})
 	if response.StatusCode != http.StatusCreated {

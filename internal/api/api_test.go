@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"bytes"
 	"context"
+	"database/sql"
 	"encoding/json"
 	"net/http"
 	"net/http/cookiejar"
@@ -12,19 +13,38 @@ import (
 	"testing"
 	"time"
 
+	internalAuth "github.com/alexhubin/Mova/internal/auth"
 	"github.com/alexhubin/Mova/internal/config"
 	"github.com/alexhubin/Mova/internal/database"
-	"github.com/livekit/protocol/auth"
+	"github.com/google/uuid"
+	livekitAuth "github.com/livekit/protocol/auth"
 )
 
 func TestAuthRoomAndLiveKitTokenFlow(t *testing.T) {
-	server, client := newTestServer(t)
+	server, client, db := newTestServer(t)
+	provisionTestUser(t, db, "anna@example.com", "anna", "very-secure-password", "Анна", true)
 
-	response := doJSON(t, client, http.MethodPost, server.URL+"/api/auth/register", map[string]string{
-		"email": "anna@example.com", "password": "very-secure-password", "display_name": "Анна", "username": "anna",
+	response := doJSON(t, client, http.MethodPost, server.URL+"/api/auth/login", map[string]string{
+		"email": "anna@example.com", "password": "very-secure-password",
 	})
-	if response.StatusCode != http.StatusCreated {
-		t.Fatalf("register status = %d, body = %s", response.StatusCode, responseBody(t, response))
+	if response.StatusCode != http.StatusOK {
+		t.Fatalf("login status = %d, body = %s", response.StatusCode, responseBody(t, response))
+	}
+	var loginUser userResponse
+	decodeResponse(t, response, &loginUser)
+	if !loginUser.MustChangePassword {
+		t.Fatal("temporary account must require a password change")
+	}
+
+	response = doJSON(t, client, http.MethodPost, server.URL+"/api/rooms", map[string]string{"name": "Blocked"})
+	if response.StatusCode != http.StatusForbidden {
+		t.Fatalf("room before first password status = %d", response.StatusCode)
+	}
+	response.Body.Close()
+
+	response = doJSON(t, client, http.MethodPut, server.URL+"/api/auth/first-password", map[string]string{"new_password": "new-secure-password"})
+	if response.StatusCode != http.StatusNoContent {
+		t.Fatalf("first password status = %d, body = %s", response.StatusCode, responseBody(t, response))
 	}
 	response.Body.Close()
 
@@ -48,7 +68,7 @@ func TestAuthRoomAndLiveKitTokenFlow(t *testing.T) {
 	}
 	var me userResponse
 	decodeResponse(t, response, &me)
-	if me.Email != "anna@example.com" || me.DisplayName != "Анна" || me.Username != "anna" {
+	if me.Email != "anna@example.com" || me.DisplayName != "Анна" || me.Username != "anna" || me.MustChangePassword {
 		t.Fatalf("unexpected me response: %+v", me)
 	}
 
@@ -81,7 +101,7 @@ func TestAuthRoomAndLiveKitTokenFlow(t *testing.T) {
 	if tokenResponse.ServerURL != "ws://livekit.test:7880" || tokenResponse.ExpiresIn != 600 {
 		t.Fatalf("unexpected token response: %+v", tokenResponse)
 	}
-	verifier, err := auth.ParseAPIToken(tokenResponse.Token)
+	verifier, err := livekitAuth.ParseAPIToken(tokenResponse.Token)
 	if err != nil {
 		t.Fatalf("parse LiveKit token: %v", err)
 	}
@@ -107,9 +127,15 @@ func TestAuthRoomAndLiveKitTokenFlow(t *testing.T) {
 }
 
 func TestProtectedEndpointsAndOrigin(t *testing.T) {
-	server, client := newTestServer(t)
+	server, client, _ := newTestServer(t)
 
-	response := doJSON(t, client, http.MethodPost, server.URL+"/api/rooms", map[string]string{"name": "Private"})
+	response := doJSON(t, client, http.MethodPost, server.URL+"/api/auth/register", map[string]string{})
+	if response.StatusCode != http.StatusNotFound {
+		t.Fatalf("public register status = %d, want 404", response.StatusCode)
+	}
+	response.Body.Close()
+
+	response = doJSON(t, client, http.MethodPost, server.URL+"/api/rooms", map[string]string{"name": "Private"})
 	if response.StatusCode != http.StatusUnauthorized {
 		t.Fatalf("unauthorized create room status = %d", response.StatusCode)
 	}
@@ -131,7 +157,7 @@ func TestProtectedEndpointsAndOrigin(t *testing.T) {
 	response.Body.Close()
 }
 
-func newTestServer(t *testing.T) (*httptest.Server, *http.Client) {
+func newTestServer(t *testing.T) (*httptest.Server, *http.Client, *sql.DB) {
 	t.Helper()
 	dsn := os.Getenv("TEST_DATABASE_URL")
 	if dsn == "" {
@@ -153,7 +179,25 @@ func newTestServer(t *testing.T) (*httptest.Server, *http.Client) {
 	}
 	server := httptest.NewServer(New(db, cfg).Handler())
 	t.Cleanup(server.Close)
-	return server, newHTTPClient(t)
+	return server, newHTTPClient(t), db
+}
+
+func provisionTestUser(t *testing.T, db *sql.DB, email, username, password, displayName string, mustChangePassword bool) userResponse {
+	t.Helper()
+	hash, err := internalAuth.HashPassword(password)
+	if err != nil {
+		t.Fatal(err)
+	}
+	user := userResponse{ID: uuid.NewString(), Email: email, Username: username, DisplayName: displayName, MustChangePassword: mustChangePassword}
+	if _, err := db.ExecContext(context.Background(), `
+		INSERT INTO users (id, username, email, display_name, password_hash, must_change_password)
+		VALUES ($1, $2, $3, $4, $5, $6)`, user.ID, username, email, displayName, hash, mustChangePassword); err != nil {
+		t.Fatalf("provision test user: %v", err)
+	}
+	if _, err := db.ExecContext(context.Background(), `INSERT INTO user_settings (user_id) VALUES ($1)`, user.ID); err != nil {
+		t.Fatalf("provision test settings: %v", err)
+	}
+	return user
 }
 
 func newHTTPClient(t *testing.T) *http.Client {

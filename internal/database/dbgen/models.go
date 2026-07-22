@@ -64,6 +64,7 @@ type User struct {
 	PasswordHash string    `json:"password_hash"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
+	MustChangePassword bool `json:"must_change_password"`
 }
 
 type UserSetting struct {

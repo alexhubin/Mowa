@@ -60,7 +60,7 @@ func (q *Queries) DeleteUserSessions(ctx context.Context, userID string) error {
 }
 
 const getSessionUser = `-- name: GetSessionUser :one
-SELECT u.id, u.username, u.email, u.display_name, u.password_hash, u.created_at, u.updated_at FROM sessions s
+SELECT u.id, u.username, u.email, u.display_name, u.password_hash, u.created_at, u.updated_at, u.must_change_password FROM sessions s
 JOIN users u ON u.id = s.user_id
 WHERE s.token_hash = $1 AND s.expires_at > $2
 LIMIT 1
@@ -82,6 +82,7 @@ func (q *Queries) GetSessionUser(ctx context.Context, arg GetSessionUserParams) 
 		&i.PasswordHash,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.MustChangePassword,
 	)
 	return i, err
 }
