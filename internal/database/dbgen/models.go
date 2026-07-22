@@ -57,14 +57,14 @@ type Session struct {
 }
 
 type User struct {
-	ID           string    `json:"id"`
-	Username     string    `json:"username"`
-	Email        string    `json:"email"`
-	DisplayName  string    `json:"display_name"`
-	PasswordHash string    `json:"password_hash"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
-	MustChangePassword bool `json:"must_change_password"`
+	ID                 string    `json:"id"`
+	Username           string    `json:"username"`
+	Email              string    `json:"email"`
+	DisplayName        string    `json:"display_name"`
+	PasswordHash       string    `json:"password_hash"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
+	MustChangePassword bool      `json:"must_change_password"`
 }
 
 type UserSetting struct {
