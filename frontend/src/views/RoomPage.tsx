@@ -176,9 +176,16 @@ export function RoomPage() {
     return [call.localParticipant, ...Array.from(call.remoteParticipants.values())]
   }, [call, call?.remoteParticipants.size, call?.state]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const screenPublication = participants
-    .map((participant) => participant.getTrackPublication(Track.Source.ScreenShare))
-    .find((publication) => publication !== undefined)
+  const activeScreenShare = participants
+    .map((participant) => ({
+      participant,
+      publication: participant.getTrackPublication(Track.Source.ScreenShare),
+    }))
+    .find(({ publication }) => publication !== undefined)
+  const screenPublication = activeScreenShare?.publication
+  const remoteScreenShareActive = Boolean(
+    call && activeScreenShare && activeScreenShare.participant.identity !== call.localParticipant.identity,
+  )
 
   useEffect(() => {
     if (!screenPublication && document.fullscreenElement === stageRef.current) {
@@ -206,6 +213,15 @@ export function RoomPage() {
     setControlError('')
     try {
       const enable = !call.localParticipant.isScreenShareEnabled
+      const remoteSharer = enable
+        ? Array.from(call.remoteParticipants.values()).find((participant) =>
+            participant.getTrackPublication(Track.Source.ScreenShare),
+          )
+        : undefined
+      if (remoteSharer) {
+        setControlError(`${remoteSharer.name || 'Другой участник'} уже демонстрирует экран`)
+        return
+      }
       const quality = settingsQuery.data?.video_quality ?? 'high'
       const preset = quality === 'low'
         ? ScreenSharePresets.h720fps30
@@ -356,8 +372,8 @@ export function RoomPage() {
           <button className={`call-control ${!micEnabled ? 'danger' : ''}`} onClick={toggleMic} disabled={controlBusy} aria-label={micEnabled ? 'Выключить микрофон' : 'Включить микрофон'} title={micEnabled ? 'Выключить микрофон' : 'Включить микрофон'}>
             {micEnabled ? <Mic size={21} /> : <MicOff size={21} />}
           </button>
-          <button className={`call-control wide ${screenEnabled ? 'active' : ''}`} onClick={toggleScreen} disabled={controlBusy} aria-label={screenEnabled ? 'Остановить показ экрана' : 'Показать экран'}>
-            <MonitorUp size={21} /><span>{screenEnabled ? 'Остановить' : 'Экран'}</span>
+          <button className={`call-control wide ${screenEnabled ? 'active' : ''}`} onClick={toggleScreen} disabled={controlBusy || remoteScreenShareActive} aria-label={screenEnabled ? 'Остановить показ экрана' : remoteScreenShareActive ? 'Другой участник уже демонстрирует экран' : 'Показать экран'} title={remoteScreenShareActive ? `${activeScreenShare?.participant.name || 'Другой участник'} уже демонстрирует экран` : undefined}>
+            <MonitorUp size={21} /><span>{screenEnabled ? 'Остановить' : remoteScreenShareActive ? 'Занято' : 'Экран'}</span>
           </button>
           <button className="call-control" onClick={() => setCallSettingsOpen(true)} aria-label="Настройки звонка" title="Настройки звонка">
             <Settings size={21} />
