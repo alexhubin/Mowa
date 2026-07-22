@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alexhubin/Mova/internal/auth"
-	"github.com/alexhubin/Mova/internal/config"
-	"github.com/alexhubin/Mova/internal/database"
-	"github.com/alexhubin/Mova/internal/database/dbgen"
+	"github.com/alexhubin/Mowa/internal/auth"
+	"github.com/alexhubin/Mowa/internal/config"
+	"github.com/alexhubin/Mowa/internal/database"
+	"github.com/alexhubin/Mowa/internal/database/dbgen"
 	"github.com/google/uuid"
 )
 

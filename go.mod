@@ -1,4 +1,4 @@
-module github.com/alexhubin/Mova
+module github.com/alexhubin/Mowa
 
 go 1.26
 

@@ -10,9 +10,9 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/alexhubin/Mova/internal/api"
-	"github.com/alexhubin/Mova/internal/config"
-	"github.com/alexhubin/Mova/internal/database"
+	"github.com/alexhubin/Mowa/internal/api"
+	"github.com/alexhubin/Mowa/internal/config"
+	"github.com/alexhubin/Mowa/internal/database"
 )
 
 func main() {

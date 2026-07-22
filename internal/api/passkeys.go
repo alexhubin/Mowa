@@ -11,8 +11,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alexhubin/Mova/internal/auth"
-	"github.com/alexhubin/Mova/internal/database/dbgen"
+	"github.com/alexhubin/Mowa/internal/auth"
+	"github.com/alexhubin/Mowa/internal/database/dbgen"
 	"github.com/go-chi/chi/v5"
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"

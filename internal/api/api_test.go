@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	internalAuth "github.com/alexhubin/Mova/internal/auth"
-	"github.com/alexhubin/Mova/internal/config"
-	"github.com/alexhubin/Mova/internal/database"
+	internalAuth "github.com/alexhubin/Mowa/internal/auth"
+	"github.com/alexhubin/Mowa/internal/config"
+	"github.com/alexhubin/Mowa/internal/database"
 	"github.com/google/uuid"
 	livekitAuth "github.com/livekit/protocol/auth"
 )
@@ -88,13 +88,13 @@ func TestAuthRoomAndLiveKitTokenFlow(t *testing.T) {
 		t.Fatalf("session presence was not refreshed: %s", lastSeen)
 	}
 
-	response = doJSON(t, client, http.MethodPost, server.URL+"/api/rooms", map[string]string{"name": "Команда Mova"})
+	response = doJSON(t, client, http.MethodPost, server.URL+"/api/rooms", map[string]string{"name": "Команда Mowa"})
 	if response.StatusCode != http.StatusCreated {
 		t.Fatalf("create room status = %d, body = %s", response.StatusCode, responseBody(t, response))
 	}
 	var room roomResponse
 	decodeResponse(t, response, &room)
-	if room.Name != "Команда Mova" || len(room.InviteCode) < 8 {
+	if room.Name != "Команда Mowa" || len(room.InviteCode) < 8 {
 		t.Fatalf("unexpected room response: %+v", room)
 	}
 

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/alexhubin/Mova/internal/database/migrations"
+	"github.com/alexhubin/Mowa/internal/database/migrations"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"github.com/pressly/goose/v3"
 )

@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/alexhubin/Mova/internal/database/dbgen"
+	"github.com/alexhubin/Mowa/internal/database/dbgen"
 	"github.com/go-chi/chi/v5"
 )
 

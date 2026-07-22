@@ -7,8 +7,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/alexhubin/Mova/internal/auth"
-	"github.com/alexhubin/Mova/internal/database/dbgen"
+	"github.com/alexhubin/Mowa/internal/auth"
+	"github.com/alexhubin/Mowa/internal/database/dbgen"
 )
 
 type profileRequest struct {
