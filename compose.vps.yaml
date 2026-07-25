@@ -1,24 +1,123 @@
+# Production stack for the shared VPS, deployed on its own:
+#
+#   docker compose -f compose.vps.yaml up -d
+#
+# compose.yaml is the local dev stack — it builds the images and runs its own
+# Caddy — and is not a base for this file. Here api and web are pulled from
+# ghcr by commit tag; the deploy writes the two tags into /opt/mova/.env.
+# Nothing but the LiveKit webhook port is published: Northstar's Caddy owns
+# 80/443 and reaches api and web by their aliases on northstar_default.
+
+name: mova
+
+x-default-logging: &default-logging
+  driver: local
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: mova
+      POSTGRES_USER: mova
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}"
+    volumes:
+      # Postgres 18 versions its data subdirectory; mounting .../data won't start.
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mova -d mova"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - app
+
   api:
+    image: ${API_IMAGE:?set API_IMAGE — the deploy writes it into .env}
+    restart: unless-stopped
+    environment:
+      HTTP_ADDR: ":8080"
+      DATABASE_URL: "postgres://mova:${POSTGRES_PASSWORD}@postgres:5432/mova?sslmode=disable"
+      APP_ORIGIN: "${APP_ORIGIN:?set APP_ORIGIN in .env}"
+      COOKIE_SECURE: "${COOKIE_SECURE:?set COOKIE_SECURE in .env}"
+      LIVEKIT_URL: "${LIVEKIT_URL:?set LIVEKIT_URL in .env}"
+      LIVEKIT_API_KEY: "${LIVEKIT_API_KEY:?set LIVEKIT_API_KEY in .env}"
+      LIVEKIT_API_SECRET: "${LIVEKIT_API_SECRET:?set LIVEKIT_API_SECRET in .env}"
+      LIVEKIT_TOKEN_TTL: "10m"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/api/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    ports:
+      # LiveKit lives in the host network namespace and posts its webhooks to
+      # http://127.0.0.1:18080/api/livekit/webhook, so this publish is what
+      # makes room lifecycle events work. Bound to loopback, not the internet.
+      - "127.0.0.1:18080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      livekit:
+        condition: service_started
     networks:
       app:
-      proxy:
+      edge:
         aliases:
           - mova-api
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
 
   web:
+    image: ${WEB_IMAGE:?set WEB_IMAGE — the deploy writes it into .env}
+    restart: unless-stopped
     networks:
       app:
-      proxy:
+      edge:
         aliases:
           - mova-web
+    security_opt:
+      - no-new-privileges:true
+    logging: *default-logging
 
-  caddy:
-    profiles:
-      - standalone
+  # Deliberately identical to the service in compose.yaml, down to the rendered
+  # config string: any change here recreates the container and drops every live
+  # call. host networking is required — WebRTC needs unmangled UDP for media.
+  livekit:
+    image: livekit/livekit-server:v1.13.4
+    restart: unless-stopped
+    network_mode: host
+    environment:
+      LIVEKIT_CONFIG: |
+        port: 7880
+        log_level: info
+        room:
+          empty_timeout: 300
+          departure_timeout: 30
+        webhook:
+          api_key: ${LIVEKIT_API_KEY:?set LIVEKIT_API_KEY in .env}
+          urls:
+            - http://127.0.0.1:18080/api/livekit/webhook
+        rtc:
+          tcp_port: 7881
+          udp_port: 7882
+          use_external_ip: true
+        turn:
+          enabled: true
+          udp_port: 3478
+          relay_range_start: 40000
+          relay_range_end: 40100
+        keys:
+          ${LIVEKIT_API_KEY:?set LIVEKIT_API_KEY in .env}: ${LIVEKIT_API_SECRET:?set LIVEKIT_API_SECRET in .env}
 
 networks:
-  proxy:
+  app:
+  edge:
     external: true
     name: northstar_default
 
+volumes:
+  postgres_data:

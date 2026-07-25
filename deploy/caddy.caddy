@@ -1,0 +1,32 @@
+# Mowa's block of the VPS's shared Caddy config. Deployed to
+# /opt/caddy-sites/mova.caddy, which the main /opt/northstar/Caddyfile imports.
+# A syntax error here blocks the reload for every project on the box, so the
+# deploy validates the whole assembled config before reloading.
+
+mova.hubindev.cc {
+	encode zstd gzip
+
+	@api path /api/*
+	reverse_proxy @api mova-api:8080 {
+		health_uri /api/health
+		health_interval 10s
+		health_timeout 2s
+	}
+	reverse_proxy mova-web:8080
+
+	header {
+		-Server
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "same-origin"
+		Permissions-Policy "camera=(), microphone=(self), display-capture=(self), geolocation=()"
+	}
+}
+
+# LiveKit runs in the host network namespace — WebRTC needs it for UDP media —
+# so it has no name on any Docker network. 172.18.0.1 is the northstar_default
+# gateway, i.e. the host as seen from the Caddy container.
+livekit.hubindev.cc {
+	reverse_proxy 172.18.0.1:7880
+}
