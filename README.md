@@ -169,21 +169,37 @@ Open these ports in the external firewall:
 
 LiveKit uses `network_mode: host` so it can advertise correct WebRTC candidates without routing media through Docker NAT. Before starting the stack, make sure these ports and ports `80`/`443` are not already occupied by another project. If the server already has a shared reverse proxy, do not start the `caddy` service from this Compose configuration without an override. Connect `api:8080`, `web:8080`, and LiveKit at `127.0.0.1:7880` to the existing proxy instead.
 
-The repository includes `compose.vps.yaml` for deployments that use an existing shared reverse proxy. It disables the second Caddy instance and connects `api` and `web` to the external `northstar_default` network. `deploy/Caddyfile.vps-snippet` contains isolated server blocks for the shared proxy. Keep the LiveKit DNS record in DNS-only mode so WebRTC traffic reaches the server directly.
-
-Deploy with the VPS override:
-
-```bash
-docker compose -f compose.yaml -f compose.vps.yaml up -d --build
-```
-
-For a standalone deployment:
+For a standalone deployment on a server that has nothing else on it:
 
 ```bash
 docker compose pull
 docker compose up -d --build
 docker compose ps
 curl -fsS https://mova.example.com/api/health
+```
+
+### Continuous deployment to the shared VPS
+
+`mova.hubindev.cc` and `livekit.hubindev.cc` run on a VPS shared with other projects, and every push to `main` deploys there through [`.github/workflows/ci.yml`](.github/workflows/ci.yml). The checks — Go tests against a real PostgreSQL, frontend lint/test/build, `sqlc diff`, and Caddy validation — run in parallel with the image builds; only the deploy waits for all of them.
+
+The pieces:
+
+| Where | What |
+|---|---|
+| `compose.vps.yaml` | The whole production stack. Overwritten by every deploy. Pulls `api` and `web` from ghcr and starts its own PostgreSQL and LiveKit; it is not an overlay on `compose.yaml`. |
+| `/opt/mova/.env` | Secrets, mode `600`. Never in Git and never in CI; the deploy only rewrites the `API_IMAGE` and `WEB_IMAGE` lines. |
+| `deploy/caddy.caddy` | Both Caddy server blocks, deployed to `/opt/caddy-sites/mova.caddy` and imported by the shared `/opt/northstar/Caddyfile`. |
+
+Repository secrets: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`, and `VPS_HOST_KEY` — the pinned SSH host key, so the deploy never trusts whatever answers on the address.
+
+The deploy pushes `compose.vps.yaml`, pins both image tags to the commit in `.env`, pulls and restarts, syncs the Caddy fragment — validating the whole assembled config and reloading only if the fragment changed — then verifies the containers from inside the Docker network and every site on the box from the outside.
+
+`api` publishes `127.0.0.1:18080`. That port is required, not a leftover: LiveKit runs in the host network namespace, so its webhooks reach the API only through a published port. Nothing else is published — the shared Caddy reaches `api` and `web` by their `mova-api` and `mova-web` aliases on the `northstar_default` network, and proxies LiveKit at `172.18.0.1:7880`, the host as seen from that network. Keep the LiveKit DNS record in DNS-only mode so WebRTC traffic reaches the server directly.
+
+To roll back, point both image tags at an earlier commit and restart:
+
+```bash
+ssh admin@<vps> 'cd /opt/mova && sed -i "s|^API_IMAGE=.*|API_IMAGE=ghcr.io/alexhubin/mowa-api:<sha>|;s|^WEB_IMAGE=.*|WEB_IMAGE=ghcr.io/alexhubin/mowa-web:<sha>|" .env && docker compose -f compose.vps.yaml up -d'
 ```
 
 ## Security and MVP limitations
