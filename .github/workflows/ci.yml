@@ -238,36 +238,13 @@ jobs:
       - name: Sync the Caddy site
         run: |
           scp -i ~/.ssh/deploy deploy/caddy.caddy \
-            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/caddy-sites/mova.caddy.new"
+            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:/opt/gateway/staging/mova.caddy.upload"
           ssh -i ~/.ssh/deploy "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}" \
             'bash -euo pipefail -s' <<'REMOTE'
-          site=/opt/caddy-sites/mova.caddy
-          incoming=$site.new
-
-          if cmp -s "$incoming" "$site"; then
-            rm -f "$incoming"
-            echo "unchanged, not reloading Caddy"
-            exit 0
-          fi
-
-          backup=$(mktemp)
-          cp "$site" "$backup" 2>/dev/null || true
-          mv "$incoming" "$site"
-
-          # The whole assembled config is checked, not just this fragment: the
-          # reload is shared with every other project on the box.
-          if ! docker run --rm \
-               -v /opt/northstar/Caddyfile:/etc/caddy/Caddyfile:ro \
-               -v /opt/caddy-sites:/etc/caddy/sites:ro \
-               caddy:2.11.4-alpine \
-               caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile >/dev/null 2>&1; then
-            if [ -s "$backup" ]; then cp "$backup" "$site"; else rm -f "$site"; fi
-            echo "::error::assembled Caddy config is invalid; site file rolled back"
-            exit 1
-          fi
-
-          docker exec northstar-caddy-1 caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile
-          echo "Caddy reloaded"
+          incoming=/opt/gateway/staging/mova.caddy.upload
+          trap 'rm -f "$incoming"' EXIT
+          /opt/gateway/deploy-site.sh \
+            mova "$incoming" https://mova.hubindev.cc/api/health
           REMOTE
 
       # Over the internal network, so this reflects the containers themselves
@@ -278,7 +255,7 @@ jobs:
             'bash -euo pipefail -s' <<'REMOTE'
           check() {
             for i in $(seq 1 20); do
-              if docker run --rm --network northstar_default curlimages/curl:8.11.1 \
+              if docker run --rm --network proxy curlimages/curl:8.11.1 \
                    -fsS -o /dev/null --max-time 5 "$1"; then
                 echo "$1 healthy after ${i}s"; return 0
               fi
@@ -310,5 +287,5 @@ jobs:
           check https://mova.hubindev.cc/api/health
           check https://mova.hubindev.cc/
           check https://livekit.hubindev.cc/
-          check https://metrics.hubindev.cc/
+          check https://monitor.hubindev.cc/api/health
           check https://api.roomsage.hubindev.cc/healthz
