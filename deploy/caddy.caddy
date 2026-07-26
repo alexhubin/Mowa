@@ -1,5 +1,5 @@
 # Mowa's block of the VPS's shared Caddy config. Deployed to
-# /opt/caddy-sites/mova.caddy, which the main /opt/northstar/Caddyfile imports.
+# /opt/gateway/sites/mova.caddy, which /opt/gateway/Caddyfile imports.
 # A syntax error here blocks the reload for every project on the box, so the
 # deploy validates the whole assembled config before reloading.
 
@@ -25,8 +25,8 @@ mova.hubindev.cc {
 }
 
 # LiveKit runs in the host network namespace — WebRTC needs it for UDP media —
-# so it has no name on any Docker network. 172.18.0.1 is the northstar_default
-# gateway, i.e. the host as seen from the Caddy container.
+# so it has no name on any Docker network. The gateway maps the stable
+# host.docker.internal name to Docker's current host gateway.
 livekit.hubindev.cc {
-	reverse_proxy 172.18.0.1:7880
+	reverse_proxy host.docker.internal:7880
 }

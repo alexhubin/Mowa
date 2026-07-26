@@ -188,13 +188,17 @@ The pieces:
 |---|---|
 | `compose.vps.yaml` | The whole production stack. Overwritten by every deploy. Pulls `api` and `web` from ghcr and starts its own PostgreSQL and LiveKit; it is not an overlay on `compose.yaml`. |
 | `/opt/mova/.env` | Secrets, mode `600`. Never in Git and never in CI; the deploy only rewrites the `API_IMAGE` and `WEB_IMAGE` lines. |
-| `deploy/caddy.caddy` | Both Caddy server blocks, deployed to `/opt/caddy-sites/mova.caddy` and imported by the shared `/opt/northstar/Caddyfile`. |
+| `deploy/caddy.caddy` | Both Caddy server blocks, deployed transactionally to `/opt/gateway/sites/mova.caddy` and imported by the shared `/opt/gateway/Caddyfile`. |
 
 Repository secrets: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`, and `VPS_HOST_KEY` — the pinned SSH host key, so the deploy never trusts whatever answers on the address.
 
 The deploy pushes `compose.vps.yaml`, pins both image tags to the commit in `.env`, pulls and restarts, syncs the Caddy fragment — validating the whole assembled config and reloading only if the fragment changed — then verifies the containers from inside the Docker network and every site on the box from the outside.
 
-`api` publishes `127.0.0.1:18080`. That port is required, not a leftover: LiveKit runs in the host network namespace, so its webhooks reach the API only through a published port. Nothing else is published — the shared Caddy reaches `api` and `web` by their `mova-api` and `mova-web` aliases on the `northstar_default` network, and proxies LiveKit at `172.18.0.1:7880`, the host as seen from that network. Keep the LiveKit DNS record in DNS-only mode so WebRTC traffic reaches the server directly.
+`api` publishes `127.0.0.1:18080`. That port is required, not a leftover: LiveKit runs in the host network namespace, so its webhooks reach the API only through a published port. Nothing else is published — the shared Caddy reaches `api` and `web` by their `mova-api` and `mova-web` aliases on the external `proxy` network, and proxies LiveKit through `host.docker.internal:7880`. Keep the LiveKit DNS record in DNS-only mode so WebRTC traffic reaches the server directly.
+
+The shared `proxy` network uses the fixed `172.19.0.0/16` subnet. UFW permits
+TCP 7880 only from that subnet, so Caddy can reach LiveKit without exposing its
+signaling port to arbitrary containers.
 
 To roll back, point both image tags at an earlier commit and restart:
 

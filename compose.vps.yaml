@@ -3,10 +3,10 @@
 #   docker compose -f compose.vps.yaml up -d
 #
 # compose.yaml is the local dev stack — it builds the images and runs its own
-# Caddy — and is not a base for this file. Here api and web are pulled from
+# gateway Caddy — and is not a base for this file. Here api and web are pulled from
 # ghcr by commit tag; the deploy writes the two tags into /opt/mova/.env.
-# Nothing but the LiveKit webhook port is published: Northstar's Caddy owns
-# 80/443 and reaches api and web by their aliases on northstar_default.
+# Nothing but the LiveKit webhook port is published: the shared gateway owns
+# 80/443 and reaches api and web by their aliases on the external proxy network.
 
 name: mova
 
@@ -117,7 +117,7 @@ networks:
   app:
   edge:
     external: true
-    name: northstar_default
+    name: proxy
 
 volumes:
   postgres_data:
