@@ -51,7 +51,7 @@ func (s *Server) listPasskeys(w http.ResponseWriter, r *http.Request) {
 	items, err := s.queries.ListPasskeys(r.Context(), currentUser(r).ID)
 	if err != nil {
 		slog.Error("list passkeys", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось загрузить passkey")
+		writeError(w, http.StatusInternalServerError, "Could not load passkeys")
 		return
 	}
 	response := make([]passkeyResponse, 0, len(items))
@@ -71,7 +71,7 @@ func (s *Server) beginPasskeyRegistration(w http.ResponseWriter, r *http.Request
 		input.Name = "Passkey"
 	}
 	if len([]rune(input.Name)) > 50 {
-		writeError(w, http.StatusUnprocessableEntity, "Название passkey не должно превышать 50 символов")
+		writeError(w, http.StatusUnprocessableEntity, "Passkey name must be 50 characters or fewer")
 		return
 	}
 
@@ -79,18 +79,18 @@ func (s *Server) beginPasskeyRegistration(w http.ResponseWriter, r *http.Request
 	count, err := s.queries.CountPasskeys(r.Context(), userRecord.ID)
 	if err != nil {
 		slog.Error("count passkeys", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось добавить passkey")
+		writeError(w, http.StatusInternalServerError, "Could not add passkey")
 		return
 	}
 	if count >= maxPasskeysPerUser {
-		writeError(w, http.StatusConflict, "Можно добавить не больше 10 passkey")
+		writeError(w, http.StatusConflict, "You can add up to 10 passkeys")
 		return
 	}
 
 	user, err := s.ensurePasskeyUser(r, userRecord)
 	if err != nil {
 		slog.Error("load passkey user", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось добавить passkey")
+		writeError(w, http.StatusInternalServerError, "Could not add passkey")
 		return
 	}
 	creation, session, err := s.webAuthn.BeginRegistration(
@@ -100,12 +100,12 @@ func (s *Server) beginPasskeyRegistration(w http.ResponseWriter, r *http.Request
 	)
 	if err != nil {
 		slog.Error("begin passkey registration", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось начать создание passkey")
+		writeError(w, http.StatusInternalServerError, "Could not start passkey registration")
 		return
 	}
 	if err := s.savePasskeyCeremony(w, r, userRecord.ID, "registration", input.Name, session); err != nil {
 		slog.Error("save passkey registration", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось начать создание passkey")
+		writeError(w, http.StatusInternalServerError, "Could not start passkey registration")
 		return
 	}
 	writeJSON(w, http.StatusOK, creation)
@@ -118,25 +118,25 @@ func (s *Server) finishPasskeyRegistration(w http.ResponseWriter, r *http.Reques
 	}
 	userRecord := currentUser(r)
 	if !ceremony.UserID.Valid || ceremony.UserID.String != userRecord.ID {
-		writeError(w, http.StatusUnauthorized, "Сессия создания passkey недействительна")
+		writeError(w, http.StatusUnauthorized, "Invalid passkey registration session")
 		return
 	}
 	user, err := s.loadPasskeyUser(r, userRecord)
 	if err != nil {
 		slog.Error("load passkey user for registration", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось сохранить passkey")
+		writeError(w, http.StatusInternalServerError, "Could not save passkey")
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxWebAuthnBodyBytes)
 	credential, err := s.webAuthn.FinishRegistration(user, session, r)
 	if err != nil {
 		slog.Warn("finish passkey registration", "error", err)
-		writeError(w, http.StatusBadRequest, "Passkey не подтверждён устройством")
+		writeError(w, http.StatusBadRequest, "Passkey was not confirmed by the device")
 		return
 	}
 	encoded, err := json.Marshal(credential)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Не удалось сохранить passkey")
+		writeError(w, http.StatusInternalServerError, "Could not save passkey")
 		return
 	}
 	item, err := s.queries.CreatePasskey(r.Context(), dbgen.CreatePasskeyParams{
@@ -148,12 +148,12 @@ func (s *Server) finishPasskeyRegistration(w http.ResponseWriter, r *http.Reques
 		CreatedAt:    s.now(),
 	})
 	if isUniqueViolation(err) {
-		writeError(w, http.StatusConflict, "Этот passkey уже добавлен")
+		writeError(w, http.StatusConflict, "This passkey has already been added")
 		return
 	}
 	if err != nil {
 		slog.Error("create passkey", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось сохранить passkey")
+		writeError(w, http.StatusInternalServerError, "Could not save passkey")
 		return
 	}
 	writeJSON(w, http.StatusCreated, publicPasskey(item))
@@ -165,12 +165,12 @@ func (s *Server) beginPasskeyLogin(w http.ResponseWriter, r *http.Request) {
 	)
 	if err != nil {
 		slog.Error("begin passkey login", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось начать вход по passkey")
+		writeError(w, http.StatusInternalServerError, "Could not start passkey sign-in")
 		return
 	}
 	if err := s.savePasskeyCeremony(w, r, "", "login", "", session); err != nil {
 		slog.Error("save passkey login", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось начать вход по passkey")
+		writeError(w, http.StatusInternalServerError, "Could not start passkey sign-in")
 		return
 	}
 	writeJSON(w, http.StatusOK, assertion)
@@ -194,17 +194,17 @@ func (s *Server) finishPasskeyLogin(w http.ResponseWriter, r *http.Request) {
 	}, session, r)
 	if err != nil {
 		slog.Warn("finish passkey login", "error", err)
-		writeError(w, http.StatusUnauthorized, "Passkey не удалось проверить")
+		writeError(w, http.StatusUnauthorized, "Could not verify passkey")
 		return
 	}
 	user, ok := validatedUser.(*passkeyUser)
 	if !ok {
-		writeError(w, http.StatusInternalServerError, "Не удалось завершить вход")
+		writeError(w, http.StatusInternalServerError, "Could not complete sign-in")
 		return
 	}
 	encoded, err := json.Marshal(credential)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Не удалось завершить вход")
+		writeError(w, http.StatusInternalServerError, "Could not complete sign-in")
 		return
 	}
 	updated, err := s.queries.UpdatePasskeyCredential(r.Context(), dbgen.UpdatePasskeyCredentialParams{
@@ -214,12 +214,12 @@ func (s *Server) finishPasskeyLogin(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil || updated != 1 {
 		slog.Error("update passkey after login", "error", err, "rows", updated)
-		writeError(w, http.StatusInternalServerError, "Не удалось завершить вход")
+		writeError(w, http.StatusInternalServerError, "Could not complete sign-in")
 		return
 	}
 	if err := s.startSession(w, r, user.user.ID); err != nil {
 		slog.Error("create passkey session", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось начать сессию")
+		writeError(w, http.StatusInternalServerError, "Could not start session")
 		return
 	}
 	writeJSON(w, http.StatusOK, publicUser(user.user))
@@ -232,11 +232,11 @@ func (s *Server) deletePasskey(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("delete passkey", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось удалить passkey")
+		writeError(w, http.StatusInternalServerError, "Could not remove passkey")
 		return
 	}
 	if deleted == 0 {
-		writeError(w, http.StatusNotFound, "Passkey не найден")
+		writeError(w, http.StatusNotFound, "Passkey not found")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -312,7 +312,7 @@ func (s *Server) consumePasskeyCeremony(w http.ResponseWriter, r *http.Request, 
 	var session webauthn.SessionData
 	cookie, err := r.Cookie(passkeyCeremonyCookie)
 	if err != nil || cookie.Value == "" {
-		writeError(w, http.StatusUnauthorized, "Сессия passkey истекла, попробуйте ещё раз")
+		writeError(w, http.StatusUnauthorized, "Passkey session expired. Try again.")
 		return dbgen.PasskeyCeremony{}, session, false
 	}
 	http.SetCookie(w, s.passkeyCookie("", s.now().Add(-time.Hour)))
@@ -320,17 +320,17 @@ func (s *Server) consumePasskeyCeremony(w http.ResponseWriter, r *http.Request, 
 		TokenHash: auth.HashSessionToken(cookie.Value), Kind: kind, ExpiresAt: s.now(),
 	})
 	if errors.Is(err, sql.ErrNoRows) {
-		writeError(w, http.StatusUnauthorized, "Сессия passkey истекла, попробуйте ещё раз")
+		writeError(w, http.StatusUnauthorized, "Passkey session expired. Try again.")
 		return dbgen.PasskeyCeremony{}, session, false
 	}
 	if err != nil {
 		slog.Error("consume passkey ceremony", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось проверить сессию passkey")
+		writeError(w, http.StatusInternalServerError, "Could not verify passkey session")
 		return dbgen.PasskeyCeremony{}, session, false
 	}
 	if err := json.Unmarshal(ceremony.SessionData, &session); err != nil {
 		slog.Error("decode passkey ceremony", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось проверить сессию passkey")
+		writeError(w, http.StatusInternalServerError, "Could not verify passkey session")
 		return dbgen.PasskeyCeremony{}, session, false
 	}
 	return ceremony, session, true

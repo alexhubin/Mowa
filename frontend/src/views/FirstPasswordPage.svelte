@@ -14,6 +14,8 @@
   }))
   const user = $derived(userQuery.data)
   const isLoading = $derived(userQuery.isLoading)
+  const rawNext = new URLSearchParams(window.location.search).get('next')
+  const next = rawNext?.startsWith('/') && !rawNext.startsWith('//') && !rawNext.includes('\\') ? rawNext : '/'
   let password = $state('')
   let confirmation = $state('')
   const mismatch = $derived(
@@ -27,7 +29,7 @@
       }),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ['me'] })
-      await navigate({ to: '/' })
+      await navigate({ to: next })
     },
   }))
   function submit(event: SubmitEvent) {
@@ -43,16 +45,16 @@
 {:else if !user}
   <Navigate to="/login" />
 {:else if !user.must_change_password}
-  <Navigate to="/" />
+  <Navigate to={next} />
 {:else}
   <main class="auth-screen">
     <section class="auth-card">
       <div class="brand auth-brand">
         <span class="brand-dot" aria-hidden="true"></span><span>mowa</span>
       </div>
-      <h1 class="first-password-title">Придумайте новый пароль</h1>
+      <h1 class="first-password-title">Choose a new password</h1>
       <p class="auth-lead">
-        Это ваш первый вход — задайте свой пароль вместо временного.
+        Replace your temporary password.
       </p>
       <form class="auth-form" onsubmit={submit}>
         <input
@@ -64,8 +66,8 @@
           maxlength={128}
           autocomplete="new-password"
           required
-          placeholder="Новый пароль"
-          aria-label="Новый пароль"
+          placeholder="New password"
+          aria-label="New password"
         />
         <input
           class="text-input"
@@ -76,11 +78,11 @@
           maxlength={128}
           autocomplete="new-password"
           required
-          placeholder="Повторите пароль"
-          aria-label="Повторите пароль"
+          placeholder="Confirm password"
+          aria-label="Confirm password"
         />
         {#if mismatch}
-          <p class="inline-error">Пароли не совпадают</p>
+          <p class="inline-error">Passwords do not match</p>
         {/if}
         {#if mutation.error}
           <p class="error-note" role="alert">
@@ -91,11 +93,11 @@
           class="button-primary auth-submit"
           disabled={mutation.isPending || mismatch}
           >{mutation.isPending
-            ? 'Сохраняем…'
-            : 'Сохранить и продолжить'}</button
+            ? 'Saving…'
+            : 'Save and continue'}</button
         >
       </form>
-      <p class="auth-footnote">Минимум 8 символов</p>
+      <p class="auth-footnote">At least 8 characters</p>
     </section>
   </main>
 {/if}

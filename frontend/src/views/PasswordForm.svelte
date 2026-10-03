@@ -27,9 +27,9 @@
 </script>
 
 <form class="settings-fields" onsubmit={submit}>
-  <h3>Изменить пароль</h3>
+  <h3>Change password</h3>
   <label class="field-label"
-    >Текущий пароль<input
+    >Current password<input
       class="text-input"
       type="password"
       autocomplete="current-password"
@@ -39,7 +39,7 @@
     /></label
   >
   <label class="field-label"
-    >Новый пароль<input
+    >New password<input
       class="text-input"
       type="password"
       autocomplete="new-password"
@@ -58,6 +58,6 @@
     disabled={mutation.isPending}
   >
     {#if mutation.isSuccess}
-      <Check size={16} /> Пароль изменён{:else}Изменить пароль{/if}
+      <Check size={16} /> Password changed{:else}Change password{/if}
   </button>
 </form>

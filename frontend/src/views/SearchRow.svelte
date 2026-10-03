@@ -13,12 +13,12 @@
   const available = $derived(person.relationship === 'none')
   const label = $derived(
     person.relationship === 'friends'
-      ? 'Уже в друзьях'
+      ? 'Already friends'
       : person.relationship === 'request_sent'
-        ? 'Заявка отправлена'
+        ? 'Request sent'
         : person.relationship === 'request_received'
-          ? 'Ответьте в заявках'
-          : 'Добавить',
+          ? 'Respond to request'
+          : 'Add',
   )
 </script>
 

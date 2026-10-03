@@ -151,7 +151,7 @@ func TestPersistentAccountsFriendsAndDirectCall(t *testing.T) {
 	}
 	response.Body.Close()
 
-	response = doJSON(t, annaClient, http.MethodPost, server.URL+"/api/rooms/"+call.InviteCode+"/messages", map[string]string{"body": "Сообщение из личного звонка"})
+	response = doJSON(t, annaClient, http.MethodPost, server.URL+"/api/rooms/"+call.InviteCode+"/messages", map[string]string{"body": "Message из личного звонка"})
 	if response.StatusCode != http.StatusCreated {
 		t.Fatalf("direct call message status = %d, body = %s", response.StatusCode, responseBody(t, response))
 	}
@@ -163,7 +163,7 @@ func TestPersistentAccountsFriendsAndDirectCall(t *testing.T) {
 		t.Fatalf("shared direct call history status = %d, body = %s", response.StatusCode, responseBody(t, response))
 	}
 	decodeResponse(t, response, &directMessages)
-	if len(directMessages) != 2 || directMessages[1].ID != callMessage.ID || directMessages[1].Body != "Сообщение из личного звонка" {
+	if len(directMessages) != 2 || directMessages[1].ID != callMessage.ID || directMessages[1].Body != "Message из личного звонка" {
 		t.Fatalf("direct call did not share friend dialog: %+v", directMessages)
 	}
 
@@ -195,7 +195,7 @@ func TestPersistentAccountsFriendsAndDirectCall(t *testing.T) {
 	}
 	var anna userResponse
 	decodeResponse(t, response, &anna)
-	if anna.Username != "anna_voice" || anna.DisplayName != "Анна Нова" {
+	if anna.Username != "anna_voice" || anna.DisplayName != "anna_voice" {
 		t.Fatalf("unexpected profile: %+v", anna)
 	}
 }

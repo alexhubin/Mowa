@@ -9,12 +9,11 @@
   let { user, onSaved }: { user: User; onSaved: (user: User) => void } =
     $props()
   let username = $state(untrack(() => user.username))
-  let displayName = $state(untrack(() => user.display_name))
   const mutation = createMutation(() => ({
     mutationFn: () =>
       api<User>('/api/account/profile', {
         method: 'PATCH',
-        body: JSON.stringify({ username, display_name: displayName }),
+        body: JSON.stringify({ username }),
       }),
     onSuccess: onSaved,
   }))
@@ -28,17 +27,7 @@
   }}
 >
   <label class="field-label"
-    >Имя<input
-      class="text-input"
-      value={displayName}
-      oninput={(event) => (displayName = event.currentTarget.value)}
-      minlength={2}
-      maxlength={40}
-      required
-    /></label
-  >
-  <label class="field-label"
-    >Ник<input
+    >Username<input
       class="text-input"
       value={username}
       oninput={(event) => (username = event.currentTarget.value.toLowerCase())}
@@ -59,6 +48,6 @@
     disabled={mutation.isPending}
   >
     {#if mutation.isSuccess}
-      <Check size={16} /> Сохранено{:else}Сохранить{/if}
+      <Check size={16} /> Saved{:else}Save{/if}
   </button>
 </form>

@@ -57,10 +57,11 @@ beforeEach(() => {
       })
     if (input === '/api/auth/me')
       return session ? json(session) : json({ error: 'Unauthorized' }, 401)
-    if (input === '/api/auth/login') {
+    if (input === '/api/auth/login' || input === '/api/auth/register') {
       session = { ...user }
       return json(session)
     }
+    if (input === '/api/auth/desktop/approve') return new Response(null, {status:204})
     if (input === '/api/auth/logout') {
       session = null
       return new Response(null, { status: 204 })
@@ -118,13 +119,13 @@ const requestsTo = (path: string) =>
 describe('Svelte application with TanStack Query', () => {
   it('shares the current-user query and reacts to search keys and friend mutations', async () => {
     render(App)
-    await screen.findByRole('heading', { name: 'Друзья' })
+    await screen.findByRole('heading', { name: 'Friends' })
     expect(requestsTo('/api/auth/me')).toHaveLength(1)
-    const search = screen.getByRole('textbox', { name: 'Найти друга' })
-    await fireEvent.input(search, { target: { value: '@sonya' } })
-    await screen.findByRole('button', { name: 'Добавить' })
+    const search = screen.getByRole('textbox', { name: 'Find a friend' })
+    await fireEvent.input(search, { target: { value: 'sonya' } })
+    await screen.findByRole('button', { name: 'Add' })
     expect(requestsTo('/api/users/search?q=sonya')).toHaveLength(1)
-    await fireEvent.click(screen.getByRole('button', { name: 'Добавить' }))
+    await fireEvent.click(screen.getByRole('button', { name: 'Add' }))
     await waitFor(() => expect(requestsTo('/api/friends')).toHaveLength(2))
     await fireEvent.input(search, { target: { value: 'alex' } })
     await waitFor(() =>
@@ -138,14 +139,14 @@ describe('Svelte application with TanStack Query', () => {
     const email = await screen.findByRole('textbox', { name: 'Email' })
     expect(route.pathname).toBe('/login')
     await fireEvent.input(email, { target: { value: user.email } })
-    await fireEvent.input(screen.getByLabelText('Пароль', { exact: true }), {
+    await fireEvent.input(screen.getByLabelText('Password', { exact: true }), {
       target: { value: 'password123' },
     })
     await fireEvent.submit(email.closest('form')!)
-    await screen.findByRole('heading', { name: 'Друзья' })
+    await screen.findByRole('heading', { name: 'Friends' })
     expect(route.pathname).toBe('/')
     expect(requestsTo('/api/auth/login')).toHaveLength(1)
-    await fireEvent.click(screen.getByRole('button', { name: 'Выйти' }))
+    await fireEvent.click(screen.getByRole('button', { name: 'Sign out' }))
     await screen.findByRole('textbox', { name: 'Email' })
     await waitFor(() =>
       expect(
@@ -159,29 +160,29 @@ describe('Svelte application with TanStack Query', () => {
   it('enforces first-password setup and opens the dashboard after saving', async () => {
     session = { ...user, must_change_password: true }
     render(App)
-    const password = await screen.findByLabelText('Новый пароль')
+    const password = await screen.findByLabelText('New password')
     expect(route.pathname).toBe('/first-password')
     expect(requestsTo('/api/friends')).toHaveLength(0)
     await fireEvent.input(password, { target: { value: 'new-password123' } })
-    await fireEvent.input(screen.getByLabelText('Повторите пароль'), {
+    await fireEvent.input(screen.getByLabelText('Confirm password'), {
       target: { value: 'different123' },
     })
     expect(
-      screen.getByRole('button', { name: 'Сохранить и продолжить' }),
+      screen.getByRole('button', { name: 'Save and continue' }),
     ).toBeDisabled()
-    await fireEvent.input(screen.getByLabelText('Повторите пароль'), {
+    await fireEvent.input(screen.getByLabelText('Confirm password'), {
       target: { value: 'new-password123' },
     })
     await fireEvent.submit(password.closest('form')!)
-    await screen.findByRole('heading', { name: 'Друзья' })
+    await screen.findByRole('heading', { name: 'Friends' })
   })
 
   it('sends direct messages, refreshes on SSE and closes the subscription with the dialog', async () => {
     render(App)
     await fireEvent.click(
-      await screen.findByRole('button', { name: 'Написать Соня' }),
+      await screen.findByRole('button', { name: 'Message Соня' }),
     )
-    const composer = screen.getByRole('textbox', { name: 'Сообщение' })
+    const composer = screen.getByRole('textbox', { name: 'Message' })
     await fireEvent.input(composer, { target: { value: 'Привет!' } })
     await fireEvent.submit(composer.closest('form')!)
     await screen.findByText('Привет!')
@@ -198,7 +199,7 @@ describe('Svelte application with TanStack Query', () => {
     source.dispatchEvent(new Event('messages'))
     await screen.findByText('Ответ через SSE')
     await fireEvent.click(
-      screen.getByRole('button', { name: 'Закрыть диалог' }),
+      screen.getByRole('button', { name: 'Close chat' }),
     )
     expect(source.close).toHaveBeenCalledOnce()
   })
@@ -215,8 +216,8 @@ describe('Svelte application with TanStack Query', () => {
       },
     ]
     render(App)
-    await screen.findByText(/Звоним/)
-    await screen.findByRole('heading', { name: 'Друзья' })
+    await screen.findByText(/Calling/)
+    await screen.findByRole('heading', { name: 'Friends' })
     calls = [
       {
         id: 'call-1',
@@ -235,25 +236,65 @@ describe('Svelte application with TanStack Query', () => {
       )!
       .dispatchEvent(new Event('calls'))
     await fireEvent.click(
-      await screen.findByRole('button', { name: 'Принять' }),
+      await screen.findByRole('button', { name: 'Accept' }),
     )
-    await screen.findByText('Готовы подключиться?')
+    await screen.findByText('Ready to join?')
     expect(route.pathname).toBe('/r/MOWA-1234')
   })
 
   it('supports internal links, browser history, room deep links and unknown routes', async () => {
     render(App)
     await fireEvent.click(
-      await screen.findByRole('link', { name: 'Настройки' }),
+      await screen.findByRole('link', { name: 'Settings' }),
     )
-    await screen.findByRole('heading', { name: 'Настройки' })
+    await screen.findByRole('heading', { name: 'Settings' })
     history.replaceState(null, '', '/')
     window.dispatchEvent(new PopStateEvent('popstate'))
-    await screen.findByRole('heading', { name: 'Друзья' })
+    await screen.findByRole('heading', { name: 'Friends' })
     navigate({ to: '/r/$inviteCode', params: { inviteCode: 'MOWA-DEEP' } })
-    await screen.findByText('Готовы подключиться?')
+    await screen.findByText('Ready to join?')
     expect(requestsTo('/api/rooms/MOWA-DEEP')).toHaveLength(1)
     navigate({ to: '/missing' })
-    await screen.findByText('Такой страницы или комнаты нет.')
+    await screen.findByText('This page or room does not exist.')
+  })
+})
+
+describe('Registration and browser desktop login', () => {
+  it('registers an account without displaying quotas', async () => {
+    session = null
+    navigate({to:'/register'})
+    render(App)
+    await screen.findByRole('heading',{name:'Sign up'})
+    await fireEvent.input(screen.getByLabelText('Username'),{target:{value:'alex'}})
+    await fireEvent.input(screen.getByLabelText('Email'),{target:{value:'alex@example.com'}})
+    await fireEvent.input(screen.getByLabelText('Password'),{target:{value:'secure-password'}})
+    await fireEvent.input(screen.getByLabelText('Confirm password'),{target:{value:'different-password'}})
+    expect(screen.getByRole('button',{name:'Create account'})).toBeDisabled()
+    await fireEvent.input(screen.getByLabelText('Confirm password'),{target:{value:'secure-password'}})
+    expect(screen.queryByText(/лимит|10 аккаунтов/i)).not.toBeInTheDocument()
+    await fireEvent.submit(screen.getByLabelText('Email').closest('form')!)
+    await screen.findByRole('heading',{name:'Friends'})
+    expect(requestsTo('/api/auth/register')).toHaveLength(1)
+  })
+  it('requires an explicit approval before signing into desktop', async () => {
+    const id='a'.repeat(43)
+    navigate({to:'/desktop-login?request='+id})
+    render(App)
+    await screen.findByRole('button',{name:'Sign in to app'})
+    expect(requestsTo('/api/auth/desktop/approve')).toHaveLength(0)
+    await fireEvent.click(screen.getByRole('button',{name:'Sign in to app'}))
+    await screen.findByRole('heading',{name:'Done'})
+    expect(requestsTo('/api/auth/desktop/approve')).toHaveLength(1)
+  })
+  it('preserves the desktop request through login and registration navigation', async () => {
+    session=null
+    const next='/desktop-login?request='+'a'.repeat(43)
+    navigate({to:next})
+    render(App)
+    await screen.findByRole('heading',{name:'Sign in'})
+    expect(new URLSearchParams(location.search).get('next')).toBe(next)
+    await fireEvent.click(screen.getByRole('link',{name:'Create account'}))
+    await screen.findByRole('heading',{name:'Sign up'})
+    expect(new URLSearchParams(location.search).get('next')).toBe(next)
   })
 })

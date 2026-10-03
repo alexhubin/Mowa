@@ -333,3 +333,7 @@ button:disabled { cursor: not-allowed; opacity: .48; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
 }
+
+.auth-switch { display: block; margin-top: 24px; padding: 10px 8px; color: var(--bright); font-size: 15px; font-weight: 600; text-align: center; text-decoration: underline; text-underline-offset: 4px; }
+.auth-switch:hover { color: var(--accent); }
+.auth-switch:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 8px; }

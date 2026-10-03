@@ -73,7 +73,8 @@
     queryKey: ['me'],
     queryFn: currentUser,
   }))
-  const user = $derived(userQuery.data)
+  const account = $derived(userQuery.data)
+  const user = $derived(account)
   const userLoading = $derived(userQuery.isLoading)
   const roomQuery = createQuery(() => ({
     queryKey: ['room', inviteCode],
@@ -83,12 +84,12 @@
   const settingsQuery = createQuery(() => ({
     queryKey: ['account-settings'],
     queryFn: () => api<AccountSettings>('/api/account/settings'),
-    enabled: Boolean(user && !user.must_change_password),
+    enabled: Boolean(account && !account.must_change_password),
   }))
   const callsQuery = createQuery(() => ({
     queryKey: ['calls'],
     queryFn: () => api<DirectCall[]>('/api/calls'),
-    enabled: Boolean(user && !user.must_change_password),
+    enabled: Boolean(account && !account.must_change_password),
   }))
   const connected = $derived.by(() => {
     void revision
@@ -264,13 +265,13 @@
         }
       } catch {
         controlError =
-          'Микрофон не включён. Разрешите доступ в настройках браузера и попробуйте ещё раз.'
+          'Microphone is off. Allow access in browser settings and try again.'
       }
       return nextCall
     },
     onError: (error) =>
       (controlError =
-        error instanceof Error ? error.message : 'Не удалось подключиться'),
+        error instanceof Error ? error.message : 'Could not connect'),
   }))
   const participants = $derived.by(() => {
     void revision
@@ -340,7 +341,7 @@
       revision += 1
     } catch (error) {
       controlError =
-        error instanceof Error ? error.message : 'Нет доступа к микрофону'
+        error instanceof Error ? error.message : 'Microphone access denied'
     } finally {
       controlBusy = false
     }
@@ -357,7 +358,7 @@
           )
         : undefined
       if (remoteSharer) {
-        controlError = `${remoteSharer.name || 'Другой участник'} уже демонстрирует экран`
+        controlError = `${remoteSharer.name || 'Another participant'} is already sharing their screen`
         return
       }
       const quality = settingsQuery.data?.video_quality ?? 'high'
@@ -386,7 +387,7 @@
       controlError =
         error instanceof Error
           ? error.message
-          : 'Демонстрация экрана недоступна в этом браузере'
+          : 'Screen sharing is unavailable in this browser'
     } finally {
       controlBusy = false
     }
@@ -397,7 +398,7 @@
       copied = true
       window.setTimeout(() => (copied = false), 1800)
     } catch {
-      controlError = 'Не удалось скопировать ссылку'
+      controlError = 'Could not copy link'
     }
   }
   async function toggleFullscreen() {
@@ -406,7 +407,7 @@
       if (document.fullscreenElement) await document.exitFullscreen()
       else await stageRef?.requestFullscreen()
     } catch {
-      controlError = 'Полноэкранный режим недоступен в этом браузере'
+      controlError = 'Fullscreen is unavailable in this browser'
     }
   }
   function openChat() {
@@ -471,21 +472,8 @@
   <main class="page-shell py-20">
     <div class="skeleton h-[65dvh]"></div>
   </main>
-{:else if !user}{@const next = encodeURIComponent(`/r/${inviteCode}`)}
-  <main class="page-shell grid min-h-[72dvh] place-items-center text-center">
-    <section class="max-w-xl">
-      <div class="eyebrow">Вас пригласили</div>
-      <h1 class="font-display mt-5 text-5xl font-semibold tracking-[-0.05em]">
-        Сначала представьтесь
-      </h1>
-      <p class="mt-4 text-lg text-ink-muted">
-        Участники комнаты должны видеть, кто присоединился к разговору.
-      </p>
-      <div class="mt-8 flex justify-center">
-        <a href={`/login?next=${next}`} class="button-primary">Войти</a>
-      </div>
-    </section>
-  </main>
+{:else if !user}
+  <Navigate to={'/login?next=' + encodeURIComponent('/r/' + inviteCode)} />
 {:else if user.must_change_password}
   <Navigate to="/first-password" />
 {:else if roomQuery.isLoading}
@@ -497,12 +485,12 @@
     <div>
       <div class="font-mono text-sm text-accent">ROOM NOT FOUND</div>
       <h1 class="font-display mt-4 text-5xl font-semibold">
-        Комната не отвечает
+        Room unavailable
       </h1>
       <p class="mt-3 text-ink-muted">
-        Проверьте ссылку или попросите новое приглашение.
+        Check the link or ask for a new invitation.
       </p>
-      <a href="/" class="button-primary mt-7">На главную</a>
+      <a href="/" class="button-primary mt-7">Go home</a>
     </div>
   </main>
 {:else}
@@ -520,11 +508,11 @@
         {:else}
           <Copy size={15} />
         {/if}
-        {copied ? 'Скопировано' : 'Копировать ссылку'}</button
+        {copied ? 'Copied' : 'Copy link'}</button
       >
       <span class="room-topbar-spacer"></span>
       <span class={connected ? 'broadcast-status online' : 'broadcast-status'}
-        ><i></i>{connected ? 'в эфире' : 'комната готова'}</span
+        ><i></i>{connected ? 'connected' : 'room ready'}</span
       >
     </div>
 
@@ -541,10 +529,10 @@
           <h2
             class="font-display text-4xl font-semibold tracking-[-0.045em] sm:text-5xl"
           >
-            Готовы подключиться?
+            Ready to join?
           </h2>
           <p class="mt-4 leading-relaxed text-ink-muted">
-            Браузер попросит доступ к микрофону. Камера не включается.
+            Your browser will request microphone access.
           </p>
           {#if controlError}
             <p class="error-note mt-5" role="alert">
@@ -557,7 +545,7 @@
             disabled={join.isPending}
           >
             <Radio size={19} />
-            {join.isPending ? 'Подключаем…' : 'Войти в разговор'}
+            {join.isPending ? 'Connecting…' : 'Join call'}
           </button>
         </div>
       </section>
@@ -570,23 +558,23 @@
               class="fullscreen-button"
               onclick={toggleFullscreen}
               aria-label={fullscreen
-                ? 'Выйти из полноэкранного режима'
-                : 'Развернуть трансляцию на весь экран'}
+                ? 'Exit fullscreen'
+                : 'View screen share in fullscreen'}
               title={fullscreen
-                ? 'Выйти из полноэкранного режима'
-                : 'На весь экран'}
+                ? 'Exit fullscreen'
+                : 'Fullscreen'}
             >
               {#if fullscreen}
                 <Minimize2 size={18} />
               {:else}
                 <Maximize2 size={18} />
               {/if}
-              <span>{fullscreen ? 'Свернуть' : 'На весь экран'}</span>
+              <span>{fullscreen ? 'Exit fullscreen' : 'Fullscreen'}</span>
             </button>
           {:else}
             <div class="empty-stage">
-              <h2>Никто не демонстрирует экран</h2>
-              <p>Нажмите кнопку с монитором внизу, чтобы показать свой</p>
+              <h2>No one is sharing their screen</h2>
+              <p>Use the screen button below to share yours</p>
             </div>
           {/if}
         </section>
@@ -595,14 +583,14 @@
           <div
             class="room-side-tabs"
             role="tablist"
-            aria-label="Панель комнаты"
+            aria-label="Room panel"
           >
             <button
               class={sidePanel === 'participants' ? 'active' : ''}
               onclick={() => (sidePanel = 'participants')}
               role="tab"
               aria-selected={sidePanel === 'participants'}
-              ><Users size={16} />Участники
+              ><Users size={16} />Participants
               <span>{participants.length}</span></button
             >
             <button
@@ -610,7 +598,7 @@
               onclick={() => (sidePanel = 'chat')}
               role="tab"
               aria-selected={sidePanel === 'chat'}
-              ><MessageSquare size={16} />Чат</button
+              ><MessageSquare size={16} />Chat</button
             >
           </div>
           {#if sidePanel === 'participants'}
@@ -627,16 +615,16 @@
               </div>
             </div>
           {:else}
-            <div class="chat-panel" role="tabpanel" aria-label="Чат комнаты">
+            <div class="chat-panel" role="tabpanel" aria-label="Room chat">
               <div class="chat-messages" aria-live="polite">
                 {#if messagesQuery.isLoading}
-                  <p class="chat-state">Загружаем сообщения…</p>
+                  <p class="chat-state">Loading messages…</p>
                 {/if}
                 {#if messagesQuery.error}
-                  <p class="chat-state error">Не удалось загрузить сообщения</p>
+                  <p class="chat-state error">Could not load messages</p>
                 {/if}
                 {#if !messagesQuery.isLoading && !messagesQuery.error && messagesQuery.data?.length === 0}
-                  <p class="chat-state">Здесь пока тихо. Напишите первым.</p>
+                  <p class="chat-state">No messages yet.</p>
                 {/if}
                 {#each messagesQuery.data ?? [] as message (message.id)}
                   <ChatMessage {message} own={message.author.id === user.id} />
@@ -659,12 +647,12 @@
                   }}
                   maxlength={2000}
                   rows={2}
-                  placeholder="Сообщение…"
-                  aria-label="Сообщение"></textarea>
+                  placeholder="Message…"
+                  aria-label="Message"></textarea>
                 <button
                   type="submit"
                   disabled={!messageBody.trim() || sendMessage.isPending}
-                  aria-label="Отправить сообщение"><Send size={18} /></button
+                  aria-label="Send message"><Send size={18} /></button
                 >
                 {#if messageBody.length > 1800}
                   <small>{messageBody.length}/2000</small>
@@ -682,13 +670,13 @@
     {/if}
 
     {#if connected}
-      <div class="control-dock" aria-label="Управление звонком">
+      <div class="control-dock" aria-label="Call controls">
         <button
           class={`call-control ${!micEnabled ? 'danger' : ''}`}
           onclick={toggleMic}
           disabled={controlBusy}
-          aria-label={micEnabled ? 'Выключить микрофон' : 'Включить микрофон'}
-          title={micEnabled ? 'Выключить микрофон' : 'Включить микрофон'}
+          aria-label={micEnabled ? 'Mute microphone' : 'Unmute microphone'}
+          title={micEnabled ? 'Mute microphone' : 'Unmute microphone'}
         >
           {#if micEnabled}
             <Mic size={21} />
@@ -701,43 +689,43 @@
           onclick={toggleScreen}
           disabled={controlBusy || remoteScreenShareActive}
           aria-label={screenEnabled
-            ? 'Остановить показ экрана'
+            ? 'Stop sharing'
             : remoteScreenShareActive
-              ? 'Другой участник уже демонстрирует экран'
-              : 'Показать экран'}
+              ? 'Another participant is already sharing'
+              : 'Share screen'}
           title={remoteScreenShareActive
-            ? `${activeScreenShare?.participant.name || 'Другой участник'} уже демонстрирует экран`
+            ? `${activeScreenShare?.participant.name || 'Another participant'} is already sharing their screen`
             : undefined}
         >
           <MonitorUp size={21} /><span
             >{screenEnabled
-              ? 'Остановить'
+              ? 'Stop'
               : remoteScreenShareActive
-                ? 'Занято'
-                : 'Экран'}</span
+                ? 'Busy'
+                : 'Screen'}</span
           >
         </button>
         <button
           class="call-control"
           onclick={() => (callSettingsOpen = true)}
-          aria-label="Настройки звонка"
-          title="Настройки звонка"
+          aria-label="Call settings"
+          title="Call settings"
         >
           <Settings size={21} />
         </button>
         <button
           class={`call-control ${sidePanel === 'chat' ? 'active' : ''}`}
           onclick={openChat}
-          aria-label="Открыть чат"
-          title="Чат"
+          aria-label="Open chat"
+          title="Chat"
         >
           <MessageSquare size={21} />
         </button>
         <button
           class="call-control danger"
           onclick={leave}
-          aria-label="Выйти из комнаты"
-          title="Выйти"
+          aria-label="Leave room"
+          title="Sign out"
         >
           <PhoneOff size={21} />
         </button>
@@ -753,8 +741,9 @@
         room={call}
         settings={settingsQuery.data}
         onClose={() => (callSettingsOpen = false)}
-        onSettingsSaved={(next) =>
-          queryClient.setQueryData(['account-settings'], next)}
+        onSettingsSaved={(next) => {
+          queryClient.setQueryData(['account-settings'], next)
+        }}
       />
     {/if}
   </main>

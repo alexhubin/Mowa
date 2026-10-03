@@ -10,6 +10,13 @@ import (
 	"time"
 )
 
+type DesktopLogin struct {
+	ID        string         `json:"id"`
+	Challenge string         `json:"challenge"`
+	UserID    sql.NullString `json:"user_id"`
+	ExpiresAt time.Time      `json:"expires_at"`
+}
+
 type DirectCall struct {
 	ID         string       `json:"id"`
 	RoomID     string       `json:"room_id"`
@@ -84,6 +91,14 @@ type Room struct {
 	LivekitRoomSid sql.NullString `json:"livekit_room_sid"`
 }
 
+type RoomGuest struct {
+	ID          string    `json:"id"`
+	RoomID      string    `json:"room_id"`
+	DisplayName string    `json:"display_name"`
+	TokenHash   string    `json:"token_hash"`
+	ExpiresAt   time.Time `json:"expires_at"`
+}
+
 type RoomMember struct {
 	RoomID    string    `json:"room_id"`
 	UserID    string    `json:"user_id"`
@@ -91,11 +106,12 @@ type RoomMember struct {
 }
 
 type RoomMessage struct {
-	ID        string    `json:"id"`
-	RoomID    string    `json:"room_id"`
-	UserID    string    `json:"user_id"`
-	Body      string    `json:"body"`
-	CreatedAt time.Time `json:"created_at"`
+	ID        string         `json:"id"`
+	RoomID    string         `json:"room_id"`
+	UserID    sql.NullString `json:"user_id"`
+	Body      string         `json:"body"`
+	CreatedAt time.Time      `json:"created_at"`
+	GuestID   sql.NullString `json:"guest_id"`
 }
 
 type Session struct {

@@ -39,13 +39,13 @@ type createFriendRequestInput struct {
 func (s *Server) searchUsers(w http.ResponseWriter, r *http.Request) {
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
 	if len([]rune(query)) < 2 || len([]rune(query)) > 40 {
-		writeError(w, http.StatusUnprocessableEntity, "Введите минимум 2 символа")
+		writeError(w, http.StatusUnprocessableEntity, "Enter at least 2 characters")
 		return
 	}
 	users, err := s.queries.SearchUsers(r.Context(), dbgen.SearchUsersParams{UserID: currentUser(r).ID, Lower: query})
 	if err != nil {
 		slog.Error("search users", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось выполнить поиск")
+		writeError(w, http.StatusInternalServerError, "Search failed")
 		return
 	}
 	result := make([]friendUserResponse, 0, len(users))
@@ -61,19 +61,19 @@ func (s *Server) listFriends(w http.ResponseWriter, r *http.Request) {
 	friends, err := s.queries.ListFriends(r.Context(), dbgen.ListFriendsParams{UserID: userID, ExpiresAt: now, LastSeenAt: now.Add(-presenceTTL)})
 	if err != nil {
 		slog.Error("list friends", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось загрузить друзей")
+		writeError(w, http.StatusInternalServerError, "Could not load friends")
 		return
 	}
 	incoming, err := s.queries.ListIncomingFriendRequests(r.Context(), userID)
 	if err != nil {
 		slog.Error("list incoming friend requests", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось загрузить заявки")
+		writeError(w, http.StatusInternalServerError, "Could not load friend requests")
 		return
 	}
 	outgoing, err := s.queries.ListOutgoingFriendRequests(r.Context(), userID)
 	if err != nil {
 		slog.Error("list outgoing friend requests", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось загрузить заявки")
+		writeError(w, http.StatusInternalServerError, "Could not load friend requests")
 		return
 	}
 
@@ -101,47 +101,47 @@ func (s *Server) createFriendRequest(w http.ResponseWriter, r *http.Request) {
 	}
 	target, err := s.queries.GetUserByUsername(r.Context(), normalizeUsername(input.Username))
 	if errors.Is(err, sql.ErrNoRows) {
-		writeError(w, http.StatusNotFound, "Пользователь не найден")
+		writeError(w, http.StatusNotFound, "User not found")
 		return
 	}
 	if err != nil {
 		slog.Error("find friend target", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось отправить заявку")
+		writeError(w, http.StatusInternalServerError, "Could not send friend request")
 		return
 	}
 	userID := currentUser(r).ID
 	if target.ID == userID {
-		writeError(w, http.StatusUnprocessableEntity, "Нельзя добавить самого себя")
+		writeError(w, http.StatusUnprocessableEntity, "You cannot add yourself")
 		return
 	}
 	isFriend, err := s.queries.IsFriend(r.Context(), dbgen.IsFriendParams{UserID: userID, FriendID: target.ID})
 	if err != nil {
 		slog.Error("check friendship", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось отправить заявку")
+		writeError(w, http.StatusInternalServerError, "Could not send friend request")
 		return
 	}
 	if isFriend {
-		writeError(w, http.StatusConflict, "Вы уже друзья")
+		writeError(w, http.StatusConflict, "You are already friends")
 		return
 	}
 	if _, err := s.queries.GetFriendRequestBetween(r.Context(), dbgen.GetFriendRequestBetweenParams{SenderID: userID, ReceiverID: target.ID}); err == nil {
-		writeError(w, http.StatusConflict, "Заявка уже существует")
+		writeError(w, http.StatusConflict, "Friend request already exists")
 		return
 	} else if !errors.Is(err, sql.ErrNoRows) {
 		slog.Error("check friend request", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось отправить заявку")
+		writeError(w, http.StatusInternalServerError, "Could not send friend request")
 		return
 	}
 	request, err := s.queries.CreateFriendRequest(r.Context(), dbgen.CreateFriendRequestParams{
 		ID: s.newID(), SenderID: userID, ReceiverID: target.ID, CreatedAt: s.now(),
 	})
 	if isUniqueViolation(err) {
-		writeError(w, http.StatusConflict, "Заявка уже существует")
+		writeError(w, http.StatusConflict, "Friend request already exists")
 		return
 	}
 	if err != nil {
 		slog.Error("create friend request", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось отправить заявку")
+		writeError(w, http.StatusInternalServerError, "Could not send friend request")
 		return
 	}
 	writeJSON(w, http.StatusCreated, friendRequestResponse{ID: request.ID, CreatedAt: request.CreatedAt, User: friendUserResponse{ID: target.ID, Username: target.Username, DisplayName: target.DisplayName}})
@@ -151,19 +151,19 @@ func (s *Server) acceptFriendRequest(w http.ResponseWriter, r *http.Request) {
 	userID := currentUser(r).ID
 	tx, err := s.db.BeginTx(r.Context(), nil)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Не удалось принять заявку")
+		writeError(w, http.StatusInternalServerError, "Could not accept friend request")
 		return
 	}
 	defer tx.Rollback()
 	queries := s.queries.WithTx(tx)
 	request, err := queries.GetFriendRequestForReceiver(r.Context(), dbgen.GetFriendRequestForReceiverParams{ID: chi.URLParam(r, "requestID"), ReceiverID: userID})
 	if errors.Is(err, sql.ErrNoRows) {
-		writeError(w, http.StatusNotFound, "Заявка не найдена")
+		writeError(w, http.StatusNotFound, "Friend request not found")
 		return
 	}
 	if err != nil {
 		slog.Error("get friend request", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось принять заявку")
+		writeError(w, http.StatusInternalServerError, "Could not accept friend request")
 		return
 	}
 	first, second := request.SenderID, request.ReceiverID
@@ -172,17 +172,17 @@ func (s *Server) acceptFriendRequest(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := queries.CreateFriendship(r.Context(), dbgen.CreateFriendshipParams{UserID: first, FriendID: second, CreatedAt: s.now()}); err != nil {
 		slog.Error("create friendship", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось принять заявку")
+		writeError(w, http.StatusInternalServerError, "Could not accept friend request")
 		return
 	}
 	if err := queries.DeleteFriendRequest(r.Context(), request.ID); err != nil {
 		slog.Error("delete accepted request", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось принять заявку")
+		writeError(w, http.StatusInternalServerError, "Could not accept friend request")
 		return
 	}
 	if err := tx.Commit(); err != nil {
 		slog.Error("commit friendship", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось принять заявку")
+		writeError(w, http.StatusInternalServerError, "Could not accept friend request")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -191,17 +191,17 @@ func (s *Server) acceptFriendRequest(w http.ResponseWriter, r *http.Request) {
 func (s *Server) declineFriendRequest(w http.ResponseWriter, r *http.Request) {
 	request, err := s.queries.GetFriendRequestForReceiver(r.Context(), dbgen.GetFriendRequestForReceiverParams{ID: chi.URLParam(r, "requestID"), ReceiverID: currentUser(r).ID})
 	if errors.Is(err, sql.ErrNoRows) {
-		writeError(w, http.StatusNotFound, "Заявка не найдена")
+		writeError(w, http.StatusNotFound, "Friend request not found")
 		return
 	}
 	if err != nil {
 		slog.Error("get declined request", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось отклонить заявку")
+		writeError(w, http.StatusInternalServerError, "Could not decline friend request")
 		return
 	}
 	if err := s.queries.DeleteFriendRequest(r.Context(), request.ID); err != nil {
 		slog.Error("delete friend request", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось отклонить заявку")
+		writeError(w, http.StatusInternalServerError, "Could not decline friend request")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -210,7 +210,7 @@ func (s *Server) declineFriendRequest(w http.ResponseWriter, r *http.Request) {
 func (s *Server) deleteFriend(w http.ResponseWriter, r *http.Request) {
 	if err := s.queries.DeleteFriendship(r.Context(), dbgen.DeleteFriendshipParams{UserID: currentUser(r).ID, FriendID: chi.URLParam(r, "userID")}); err != nil {
 		slog.Error("delete friendship", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось удалить друга")
+		writeError(w, http.StatusInternalServerError, "Could not remove friend")
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

@@ -21,29 +21,29 @@
 <article class={`friend-row ${friend.online ? '' : 'offline-row'}`}>
   <Avatar name={friend.display_name} online={friend.online} /><UserLabel
     user={friend}
-    detail={friend.online ? 'в сети' : 'не в сети'}
+    detail={friend.online ? 'online' : 'offline'}
   />
   <div class="friend-actions">
     <button
       class="friend-message"
       onclick={onMessage}
-      aria-label={`Написать ${friend.display_name}`}
-      title="Написать"><MessageCircle size={16} /><span>Написать</span></button
+      aria-label={`Message ${friend.display_name}`}
+      title="Message"><MessageCircle size={16} /><span>Message</span></button
     ><button
       class="friend-call"
       onclick={onCall}
       disabled={busy || !friend.online}
       aria-label={friend.online
-        ? `Позвонить ${friend.display_name}`
-        : `${friend.display_name} не в сети`}
-      title={friend.online ? 'Позвонить' : 'Пользователь не в сети'}
+        ? `Call ${friend.display_name}`
+        : `${friend.display_name} offline`}
+      title={friend.online ? 'Call' : 'User is offline'}
     >
       {#if friend.online}
         <Phone size={16} />
       {:else}
         <PhoneOff size={16} />
       {/if}
-      <span>{friend.online ? 'Позвонить' : 'Не в сети'}</span></button
+      <span>{friend.online ? 'Call' : 'Offline'}</span></button
     >
   </div>
 </article>

@@ -35,7 +35,7 @@ func (s *Server) listCalls(w http.ResponseWriter, r *http.Request) {
 	rows, err := s.queries.ListOpenCallsForUser(r.Context(), currentUser(r).ID)
 	if err != nil {
 		slog.Error("list calls", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось загрузить звонки")
+		writeError(w, http.StatusInternalServerError, "Could not load calls")
 		return
 	}
 	result := make([]callResponse, 0, len(rows))
@@ -52,75 +52,75 @@ func (s *Server) createDirectCall(w http.ResponseWriter, r *http.Request) {
 	}
 	caller := currentUser(r)
 	if input.UserID == caller.ID || input.UserID == "" {
-		writeError(w, http.StatusUnprocessableEntity, "Выберите друга для звонка")
+		writeError(w, http.StatusUnprocessableEntity, "Choose a friend to call")
 		return
 	}
 	callee, err := s.queries.GetUserByID(r.Context(), input.UserID)
 	if errors.Is(err, sql.ErrNoRows) {
-		writeError(w, http.StatusNotFound, "Пользователь не найден")
+		writeError(w, http.StatusNotFound, "User not found")
 		return
 	}
 	if err != nil {
 		slog.Error("get call target", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось начать звонок")
+		writeError(w, http.StatusInternalServerError, "Could not start call")
 		return
 	}
 	isFriend, err := s.queries.IsFriend(r.Context(), dbgen.IsFriendParams{UserID: caller.ID, FriendID: callee.ID})
 	if err != nil {
 		slog.Error("check call friendship", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось начать звонок")
+		writeError(w, http.StatusInternalServerError, "Could not start call")
 		return
 	}
 	if !isFriend {
-		writeError(w, http.StatusForbidden, "Звонить можно только друзьям")
+		writeError(w, http.StatusForbidden, "You can only call friends")
 		return
 	}
 	now := s.now()
 	online, err := s.queries.IsUserOnline(r.Context(), dbgen.IsUserOnlineParams{UserID: callee.ID, ExpiresAt: now, LastSeenAt: now.Add(-presenceTTL)})
 	if err != nil {
 		slog.Error("check call presence", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось проверить статус пользователя")
+		writeError(w, http.StatusInternalServerError, "Could not check user status")
 		return
 	}
 	if !online {
-		writeError(w, http.StatusConflict, "Пользователь не в сети")
+		writeError(w, http.StatusConflict, "User is offline")
 		return
 	}
 	invite, err := s.newInvite()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Не удалось начать звонок")
+		writeError(w, http.StatusInternalServerError, "Could not start call")
 		return
 	}
 
 	tx, err := s.db.BeginTx(r.Context(), nil)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Не удалось начать звонок")
+		writeError(w, http.StatusInternalServerError, "Could not start call")
 		return
 	}
 	defer tx.Rollback()
 	queries := s.queries.WithTx(tx)
 	if _, err := queries.GetOpenCallForUser(r.Context(), caller.ID); err == nil {
-		writeError(w, http.StatusConflict, "Сначала завершите текущий звонок")
+		writeError(w, http.StatusConflict, "End your current call first")
 		return
 	} else if !errors.Is(err, sql.ErrNoRows) {
 		slog.Error("check caller open call", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось начать звонок")
+		writeError(w, http.StatusInternalServerError, "Could not start call")
 		return
 	}
 	if _, err := queries.GetOpenCallForUser(r.Context(), callee.ID); err == nil {
-		writeError(w, http.StatusConflict, "Пользователь уже участвует в другом звонке")
+		writeError(w, http.StatusConflict, "User is already in another call")
 		return
 	} else if !errors.Is(err, sql.ErrNoRows) {
 		slog.Error("check callee open call", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось начать звонок")
+		writeError(w, http.StatusInternalServerError, "Could not start call")
 		return
 	}
 	if _, err := queries.GetOpenCallBetween(r.Context(), dbgen.GetOpenCallBetweenParams{CallerID: caller.ID, CalleeID: callee.ID}); err == nil {
-		writeError(w, http.StatusConflict, "Между вами уже есть активный звонок")
+		writeError(w, http.StatusConflict, "You already have an active call together")
 		return
 	} else if !errors.Is(err, sql.ErrNoRows) {
 		slog.Error("check open call", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось начать звонок")
+		writeError(w, http.StatusInternalServerError, "Could not start call")
 		return
 	}
 	now = s.now()
@@ -129,28 +129,28 @@ func (s *Server) createDirectCall(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("create direct room", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось начать звонок")
+		writeError(w, http.StatusInternalServerError, "Could not start call")
 		return
 	}
 	for _, userID := range []string{caller.ID, callee.ID} {
 		if err := queries.AddRoomMember(r.Context(), dbgen.AddRoomMemberParams{RoomID: room.ID, UserID: userID, CreatedAt: now}); err != nil {
 			slog.Error("add direct room member", "error", err)
-			writeError(w, http.StatusInternalServerError, "Не удалось начать звонок")
+			writeError(w, http.StatusInternalServerError, "Could not start call")
 			return
 		}
 	}
 	call, err := queries.CreateDirectCall(r.Context(), dbgen.CreateDirectCallParams{ID: s.newID(), RoomID: room.ID, CallerID: caller.ID, CalleeID: callee.ID, CreatedAt: now})
 	if err != nil {
 		slog.Error("create direct call", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось начать звонок")
+		writeError(w, http.StatusInternalServerError, "Could not start call")
 		return
 	}
 	for _, participant := range []struct {
 		userID  string
 		message string
 	}{
-		{caller.ID, "Сначала завершите текущий звонок"},
-		{callee.ID, "Пользователь уже участвует в другом звонке"},
+		{caller.ID, "End your current call first"},
+		{callee.ID, "User is already in another call"},
 	} {
 		err := queries.RegisterOpenCallParticipant(r.Context(), dbgen.RegisterOpenCallParticipantParams{UserID: participant.userID, CallID: call.ID, CreatedAt: now})
 		if isUniqueViolation(err) {
@@ -159,13 +159,13 @@ func (s *Server) createDirectCall(w http.ResponseWriter, r *http.Request) {
 		}
 		if err != nil {
 			slog.Error("register open call participant", "error", err)
-			writeError(w, http.StatusInternalServerError, "Не удалось начать звонок")
+			writeError(w, http.StatusInternalServerError, "Could not start call")
 			return
 		}
 	}
 	if err := tx.Commit(); err != nil {
 		slog.Error("commit direct call", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось начать звонок")
+		writeError(w, http.StatusInternalServerError, "Could not start call")
 		return
 	}
 	s.callEvents.notify(caller.ID, callee.ID)
@@ -175,12 +175,12 @@ func (s *Server) createDirectCall(w http.ResponseWriter, r *http.Request) {
 func (s *Server) acceptDirectCall(w http.ResponseWriter, r *http.Request) {
 	call, err := s.queries.AcceptDirectCall(r.Context(), dbgen.AcceptDirectCallParams{ID: chi.URLParam(r, "callID"), CalleeID: currentUser(r).ID, AnsweredAt: sql.NullTime{Time: s.now(), Valid: true}})
 	if errors.Is(err, sql.ErrNoRows) {
-		writeError(w, http.StatusConflict, "Звонок уже завершён")
+		writeError(w, http.StatusConflict, "Call has already ended")
 		return
 	}
 	if err != nil {
 		slog.Error("accept call", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось принять звонок")
+		writeError(w, http.StatusInternalServerError, "Could not accept call")
 		return
 	}
 	s.callEvents.notify(call.CallerID, call.CalleeID)
@@ -190,12 +190,12 @@ func (s *Server) acceptDirectCall(w http.ResponseWriter, r *http.Request) {
 func (s *Server) declineDirectCall(w http.ResponseWriter, r *http.Request) {
 	call, err := s.queries.DeclineDirectCall(r.Context(), dbgen.DeclineDirectCallParams{ID: chi.URLParam(r, "callID"), CalleeID: currentUser(r).ID, EndedAt: sql.NullTime{Time: s.now(), Valid: true}})
 	if errors.Is(err, sql.ErrNoRows) {
-		writeError(w, http.StatusConflict, "Звонок уже завершён")
+		writeError(w, http.StatusConflict, "Call has already ended")
 		return
 	}
 	if err != nil {
 		slog.Error("decline call", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось отклонить звонок")
+		writeError(w, http.StatusInternalServerError, "Could not decline call")
 		return
 	}
 	s.callEvents.notify(call.CallerID, call.CalleeID)
@@ -210,7 +210,7 @@ func (s *Server) endDirectCall(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		slog.Error("end call", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось завершить звонок")
+		writeError(w, http.StatusInternalServerError, "Could not end call")
 		return
 	}
 	s.callEvents.notify(call.CallerID, call.CalleeID)
@@ -220,7 +220,7 @@ func (s *Server) endDirectCall(w http.ResponseWriter, r *http.Request) {
 func writeCallByID(w http.ResponseWriter, r *http.Request, s *Server, callID string) {
 	rows, err := s.queries.ListOpenCallsForUser(r.Context(), currentUser(r).ID)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Не удалось загрузить звонок")
+		writeError(w, http.StatusInternalServerError, "Could not load call")
 		return
 	}
 	for _, row := range rows {
@@ -229,7 +229,7 @@ func writeCallByID(w http.ResponseWriter, r *http.Request, s *Server, callID str
 			return
 		}
 	}
-	writeError(w, http.StatusNotFound, "Звонок не найден")
+	writeError(w, http.StatusNotFound, "Call not found")
 }
 
 func callFromRow(row dbgen.ListOpenCallsForUserRow) callResponse {

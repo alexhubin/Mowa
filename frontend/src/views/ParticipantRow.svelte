@@ -30,13 +30,13 @@
   </div>
   <div class="min-w-0 flex-1">
     <div class="truncate text-sm font-semibold">
-      {participant.name || 'Участник'}
+      {participant.name || 'Participant'}
       {#if local}
-        <span class="font-normal text-ink-muted">(вы)</span>
+        <span class="font-normal text-ink-muted">(you)</span>
       {/if}
     </div>
     <div class="mt-0.5 text-xs text-ink-muted">
-      {speaking ? 'говорит' : muted ? 'микрофон выключен' : 'слушает'}
+      {speaking ? 'speaking' : muted ? 'microphone off' : 'listening'}
     </div>
   </div>
   <span class={muted ? 'mic-state muted' : 'mic-state'}>

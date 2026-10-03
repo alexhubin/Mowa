@@ -47,14 +47,14 @@ func (s *Server) listRoomMessages(w http.ResponseWriter, r *http.Request) {
 	rows, err := s.queries.ListRoomMessages(r.Context(), room.ID)
 	if err != nil {
 		slog.Error("list room messages", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось загрузить сообщения")
+		writeError(w, http.StatusInternalServerError, "Could not load messages")
 		return
 	}
 	result := make([]roomMessageResponse, 0, len(rows))
 	for _, row := range rows {
 		result = append(result, roomMessageResponse{
 			ID: row.ID, Body: row.Body, CreatedAt: row.CreatedAt,
-			Author: messageAuthorResponse{ID: row.UserID, Username: row.Username, DisplayName: row.DisplayName},
+			Author: messageAuthorResponse{ID: row.AuthorID, Username: row.Username, DisplayName: row.DisplayName},
 		})
 	}
 	writeJSON(w, http.StatusOK, result)
@@ -77,12 +77,14 @@ func (s *Server) createRoomMessage(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
+	userID := sql.NullString{String: user.ID, Valid: true}
+	guestID := sql.NullString{}
 	message, err := s.queries.CreateRoomMessage(r.Context(), dbgen.CreateRoomMessageParams{
-		ID: s.newID(), RoomID: room.ID, UserID: user.ID, Body: body, CreatedAt: s.now(),
+		ID: s.newID(), RoomID: room.ID, UserID: userID, GuestID: guestID, Body: body, CreatedAt: s.now(),
 	})
 	if err != nil {
 		slog.Error("create room message", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось отправить сообщение")
+		writeError(w, http.StatusInternalServerError, "Could not send message")
 		return
 	}
 	s.messageEvents.notify("room:" + room.ID)
@@ -122,7 +124,7 @@ func (s *Server) writeDirectMessages(w http.ResponseWriter, r *http.Request, use
 	})
 	if err != nil {
 		slog.Error("list direct messages", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось загрузить сообщения")
+		writeError(w, http.StatusInternalServerError, "Could not load messages")
 		return
 	}
 	result := make([]roomMessageResponse, 0, len(rows))
@@ -154,7 +156,7 @@ func (s *Server) createDirectMessageFor(w http.ResponseWriter, r *http.Request, 
 	})
 	if err != nil {
 		slog.Error("create direct message", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось отправить сообщение")
+		writeError(w, http.StatusInternalServerError, "Could not send message")
 		return
 	}
 	s.messageEvents.notify("user:" + user.ID)
@@ -172,7 +174,7 @@ func decodeMessageBody(w http.ResponseWriter, r *http.Request) (string, bool) {
 	}
 	body := strings.TrimSpace(input.Body)
 	if length := len([]rune(body)); length == 0 || length > maxMessageLength {
-		writeError(w, http.StatusUnprocessableEntity, "Сообщение должно содержать от 1 до 2000 символов")
+		writeError(w, http.StatusUnprocessableEntity, "Message must be 1–2000 characters")
 		return "", false
 	}
 	return body, true
@@ -181,12 +183,12 @@ func decodeMessageBody(w http.ResponseWriter, r *http.Request) (string, bool) {
 func (s *Server) directRoomPeerID(w http.ResponseWriter, r *http.Request, roomID, userID string) (string, bool) {
 	peerID, err := s.queries.GetDirectRoomPeerID(r.Context(), dbgen.GetDirectRoomPeerIDParams{RoomID: roomID, CallerID: userID})
 	if errors.Is(err, sql.ErrNoRows) {
-		writeError(w, http.StatusNotFound, "Личный звонок не найден")
+		writeError(w, http.StatusNotFound, "Direct call not found")
 		return "", false
 	}
 	if err != nil {
 		slog.Error("get direct room peer", "room_id", roomID, "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось загрузить личный диалог")
+		writeError(w, http.StatusInternalServerError, "Could not load conversation")
 		return "", false
 	}
 	return peerID, true
@@ -202,17 +204,17 @@ func (s *Server) streamDirectMessageEvents(w http.ResponseWriter, r *http.Reques
 
 func (s *Server) requireFriend(w http.ResponseWriter, r *http.Request, userID, friendID string) bool {
 	if friendID == "" || friendID == userID {
-		writeError(w, http.StatusForbidden, "Личные сообщения доступны только друзьям")
+		writeError(w, http.StatusForbidden, "Direct messages are only available between friends")
 		return false
 	}
 	isFriend, err := s.queries.IsFriend(r.Context(), dbgen.IsFriendParams{UserID: userID, FriendID: friendID})
 	if err != nil {
 		slog.Error("check direct message friendship", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось проверить список друзей")
+		writeError(w, http.StatusInternalServerError, "Could not verify friends list")
 		return false
 	}
 	if !isFriend {
-		writeError(w, http.StatusForbidden, "Личные сообщения доступны только друзьям")
+		writeError(w, http.StatusForbidden, "Direct messages are only available between friends")
 		return false
 	}
 	return true

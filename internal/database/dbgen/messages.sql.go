@@ -7,21 +7,23 @@ package dbgen
 
 import (
 	"context"
+	"database/sql"
 	"time"
 )
 
 const createRoomMessage = `-- name: CreateRoomMessage :one
-INSERT INTO room_messages (id, room_id, user_id, body, created_at)
-VALUES ($1, $2, $3, $4, $5)
-RETURNING id, room_id, user_id, body, created_at
+INSERT INTO room_messages (id, room_id, user_id, body, created_at, guest_id)
+VALUES ($1, $2, $3, $4, $5, $6)
+RETURNING id, room_id, user_id, body, created_at, guest_id
 `
 
 type CreateRoomMessageParams struct {
-	ID        string    `json:"id"`
-	RoomID    string    `json:"room_id"`
-	UserID    string    `json:"user_id"`
-	Body      string    `json:"body"`
-	CreatedAt time.Time `json:"created_at"`
+	ID        string         `json:"id"`
+	RoomID    string         `json:"room_id"`
+	UserID    sql.NullString `json:"user_id"`
+	Body      string         `json:"body"`
+	CreatedAt time.Time      `json:"created_at"`
+	GuestID   sql.NullString `json:"guest_id"`
 }
 
 func (q *Queries) CreateRoomMessage(ctx context.Context, arg CreateRoomMessageParams) (RoomMessage, error) {
@@ -31,6 +33,7 @@ func (q *Queries) CreateRoomMessage(ctx context.Context, arg CreateRoomMessagePa
 		arg.UserID,
 		arg.Body,
 		arg.CreatedAt,
+		arg.GuestID,
 	)
 	var i RoomMessage
 	err := row.Scan(
@@ -39,22 +42,24 @@ func (q *Queries) CreateRoomMessage(ctx context.Context, arg CreateRoomMessagePa
 		&i.UserID,
 		&i.Body,
 		&i.CreatedAt,
+		&i.GuestID,
 	)
 	return i, err
 }
 
 const listRoomMessages = `-- name: ListRoomMessages :many
-SELECT id, room_id, user_id, body, created_at, username, display_name FROM (
+SELECT id, room_id, author_id, body, created_at, username, display_name FROM (
     SELECT
         m.id,
         m.room_id,
-        m.user_id,
+        COALESCE(m.user_id, m.guest_id)::text AS author_id,
         m.body,
         m.created_at,
-        u.username,
-        u.display_name
+        COALESCE(u.username, '')::text AS username,
+        COALESCE(u.display_name, g.display_name)::text AS display_name
     FROM room_messages m
-    JOIN users u ON u.id = m.user_id
+    LEFT JOIN users u ON u.id = m.user_id
+    LEFT JOIN room_guests g ON g.id = m.guest_id
     WHERE m.room_id = $1
     ORDER BY m.created_at DESC, m.id DESC
     LIMIT 100
@@ -65,7 +70,7 @@ ORDER BY recent.created_at, recent.id
 type ListRoomMessagesRow struct {
 	ID          string    `json:"id"`
 	RoomID      string    `json:"room_id"`
-	UserID      string    `json:"user_id"`
+	AuthorID    string    `json:"author_id"`
 	Body        string    `json:"body"`
 	CreatedAt   time.Time `json:"created_at"`
 	Username    string    `json:"username"`
@@ -84,7 +89,7 @@ func (q *Queries) ListRoomMessages(ctx context.Context, roomID string) ([]ListRo
 		if err := rows.Scan(
 			&i.ID,
 			&i.RoomID,
-			&i.UserID,
+			&i.AuthorID,
 			&i.Body,
 			&i.CreatedAt,
 			&i.Username,

@@ -5,7 +5,7 @@ Mowa is a minimalist web application for one-to-one and group voice calls with s
 ## MVP features
 
 - Persistent accounts with unique usernames, profiles, and password changes
-- Sign-in and sign-out with secure 30-day sessions; public registration is disabled
+- Sign-in, sign-out and limited public registration with secure 30-day sessions
 - Passwordless sign-in with passkeys (Touch ID, Face ID, Windows Hello, or a hardware security key)
 - Mandatory temporary password change on first sign-in
 - User search, friend requests, and a friends list
@@ -105,6 +105,26 @@ docker compose run --rm \
 ```
 
 Until the user replaces the temporary password, the only available actions are signing out and setting a new password. Friends, settings, rooms, and LiveKit tokens remain blocked by the API.
+
+### Invite a guest
+
+An account holder creates a group room and shares its `/r/<invite-code>` link.
+Visitors enter a display name and join without an account or password. Guests
+can use the microphone, screen sharing, room chat, and local device settings.
+They cannot create rooms, access account settings or contacts, or join private
+one-to-one calls as guests.
+
+Guest sessions use a separate HttpOnly cookie scoped to the room API path and
+are checked against that room on every API request. They expire after 24 hours
+or on explicit exit. The existing signed LiveKit `room_finished` webhook deletes
+the room, guest sessions, and room chat when the call has ended; its invitation
+then stops accepting new guests. LiveKit access tokens already issued retain
+their configured expiry. A room admits up to 100 unexpired guest sessions.
+Anyone with a group invitation can join it, so share the link only with invitees.
+
+To preview locally, open `http://localhost` as the owner and open the room link
+in a private browser window as the guest. The Docker Desktop configuration is
+limited to this Mac; the localhost invitation will not work on a friend's device.
 
 Stop the stack without deleting its data:
 
@@ -250,7 +270,9 @@ ssh admin@<vps> 'cd /opt/mova && sed -i "s|^API_IMAGE=.*|API_IMAGE=ghcr.io/alexh
 - Passwords are hashed with Argon2id and a unique salt.
 - Passkeys use discoverable WebAuthn credentials with mandatory user verification. The private key remains on the device; the API stores the public credential record and its updatable signature counter.
 - WebAuthn challenges expire after 5 minutes, can be used only once, and are bound to a random `HttpOnly`, `SameSite=Strict`, `Secure` cookie in production.
-- There is no public registration endpoint; temporary accounts can only be created through the administrative CLI.
+- Public registration creates full accounts and starts a session. The backend-only constant `registrationAccountLimit` in `internal/api/registration.go` is 10, counting all existing users. Registration serializes the count and insert in PostgreSQL; lowering the constant blocks new registrations without removing accounts. No quota is exposed in the interface.
+- Rooms require full accounts. Legacy guest cookies no longer grant access.
+- Mowa Desktop opens `/desktop-login` in the system browser. The signed-in user explicitly approves; a five-minute, single-use request bound to the app's random verifier creates a separate desktop session. Browser passwords and session tokens are never placed in URLs.
 - Sessions use random opaque tokens; only their SHA-256 hashes are stored in PostgreSQL.
 - Session cookies are `HttpOnly` and `SameSite=Lax`; `Secure` is enabled in production.
 - State-changing requests validate the `Origin` header.

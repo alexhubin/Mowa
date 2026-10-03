@@ -32,14 +32,14 @@
   }}
 >
   <label class="field-label"
-    >Качество<select
+    >Quality<select
       class="text-input"
       value={quality}
       oninput={(event) =>
         (quality = event.currentTarget
           .value as AccountSettings['video_quality'])}
-      ><option value="low">720p · 30 кадров/с</option><option value="high"
-        >1080p · 30 кадров/с</option
+      ><option value="low">720p · 30 fps</option><option value="high"
+        >1080p · 30 fps</option
       ></select
     ></label
   >
@@ -48,6 +48,6 @@
     disabled={mutation.isPending}
   >
     {#if mutation.isSuccess}
-      <Check size={16} /> Сохранено{:else}Сохранить{/if}
+      <Check size={16} /> Saved{:else}Save{/if}
   </button>
 </form>

@@ -11,7 +11,7 @@
   import { passkeysSupported, registerPasskey, type Passkey } from '../passkeys'
 
   const queryClient = useQueryClient()
-  let name = $state('Мой passkey')
+  let name = $state('My passkey')
   const passkeys = createQuery(() => ({
     queryKey: ['passkeys'],
     queryFn: () => api<Passkey[]>('/api/account/passkeys'),
@@ -23,7 +23,7 @@
         passkey,
         ...current,
       ])
-      name = 'Мой passkey'
+      name = 'My passkey'
     },
   }))
   const remove = createMutation(() => ({
@@ -37,7 +37,7 @@
   const supported = $derived(passkeysSupported())
 
   function formatPasskeyDate(value: string) {
-    return new Intl.DateTimeFormat('ru-RU', {
+    return new Intl.DateTimeFormat('en-US', {
       dateStyle: 'medium',
       timeStyle: 'short',
     }).format(new Date(value))
@@ -45,12 +45,12 @@
 </script>
 
 <section class="settings-card">
-  <h2>Вход по passkey</h2>
+  <h2>Passkeys</h2>
   <div class="passkey-intro">
     <KeyRound size={20} />
     <p>
-      Входите без пароля через Touch ID, Face ID, Windows Hello или ключ
-      безопасности.
+      Use Touch ID, Face ID, Windows Hello or a security
+      key.
     </p>
   </div>
   {#if supported}
@@ -67,14 +67,14 @@
         oninput={(event) => (name = event.currentTarget.value)}
         maxlength={50}
         required
-        aria-label="Название passkey"
-        placeholder="Например, MacBook"
+        aria-label="Passkey name"
+        placeholder="e.g. MacBook"
       />
       <button
         class="button-primary compact"
         disabled={create.isPending || !name.trim()}
         ><Plus size={16} />
-        {create.isPending ? 'Подтвердите…' : 'Добавить'}</button
+        {create.isPending ? 'Confirm…' : 'Add'}</button
       >
     </form>
     {#if passkeys.error || create.error || remove.error}
@@ -94,18 +94,18 @@
           <span
             ><strong>{passkey.name}</strong><small
               >{passkey.last_used_at
-                ? `Последний вход: ${formatPasskeyDate(passkey.last_used_at)}`
-                : `Добавлен: ${formatPasskeyDate(passkey.created_at)}`}</small
+                ? `Last used: ${formatPasskeyDate(passkey.last_used_at)}`
+                : `Added: ${formatPasskeyDate(passkey.created_at)}`}</small
             ></span
           >
           <button
             type="button"
             class="mini-action"
-            aria-label={`Удалить ${passkey.name}`}
-            title="Удалить passkey"
+            aria-label={`Remove ${passkey.name}`}
+            title="Remove passkey"
             disabled={remove.isPending}
             onclick={() => {
-              if (window.confirm(`Удалить passkey «${passkey.name}»?`))
+              if (window.confirm(`Remove passkey «${passkey.name}»?`))
                 remove.mutate(passkey.id)
             }}><Trash2 size={16} /></button
           >
@@ -113,15 +113,15 @@
       {/each}
       {#if !passkeys.isLoading && passkeys.data?.length === 0}
         <p class="settings-hint">
-          Passkey пока не добавлены. Пароль останется доступен как резервный
-          способ входа.
+          No passkeys yet. You can still sign in
+          with your password.
         </p>
       {/if}
     </div>
   {:else}
     <p class="settings-hint">
-      Passkey недоступен: нужен современный браузер и защищённое
-      HTTPS-соединение.
+      Passkeys require a supported browser and a secure
+      HTTPS connection.
     </p>
   {/if}
 </section>

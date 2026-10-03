@@ -50,7 +50,7 @@
       devices = await requestAndListAudioDevices()
     } catch {
       deviceError =
-        'Браузер не дал доступ к аудиоустройствам. Проверьте разрешение микрофона.'
+        'Audio device access denied. Check microphone permissions.'
     }
   }
   function updateDevice<K extends keyof LocalDeviceSettings>(
@@ -75,13 +75,13 @@
   <Navigate to="/first-password" />
 {:else}
   <main class="app-page settings-page">
-    <h1 class="page-title">Настройки</h1>
+    <h1 class="page-title">Settings</h1>
     <div class="settings-stack">
       <section class="settings-card">
-        <h2>Аккаунт</h2>
+        <h2>Account</h2>
         <div class="account-avatar-row">
           <span class="account-avatar">{initials(user.display_name)}</span><span
-            ><strong>{user.display_name}</strong><small>@{user.username}</small
+            ><strong>{user.display_name}</strong><small>{user.username}</small
             ></span
           >
         </div>
@@ -97,23 +97,23 @@
 
       <section class="settings-card">
         <div class="settings-card-heading">
-          <h2>Аудио</h2>
+          <h2>Audio</h2>
           <button
             type="button"
             class="button-secondary compact"
             onclick={allowDevices}
-            ><SlidersHorizontal size={16} /> Обновить устройства</button
+            ><SlidersHorizontal size={16} /> Refresh devices</button
           >
         </div>
         <div class="settings-fields">
           <DeviceSelect
-            label="Микрофон"
+            label="Microphone"
             value={deviceValues.audioInputId}
             devices={devices.inputs}
             onChange={(value) => updateDevice('audioInputId', value)}
           />
           <DeviceSelect
-            label="Динамики"
+            label="Speakers"
             value={deviceValues.audioOutputId}
             devices={devices.outputs}
             onChange={(value) => updateDevice('audioOutputId', value)}
@@ -121,7 +121,7 @@
           />
           <label class="range-setting">
             <span
-              >Громкость микрофона <strong
+              >Microphone volume <strong
                 >{deviceValues.microphoneGain}%</strong
               ></span
             >
@@ -140,8 +140,8 @@
           </label>
           <label class="toggle-setting">
             <span
-              ><strong>Шумоподавление</strong><small
-                >Убирает постоянный фоновый шум средствами браузера</small
+              ><strong>Noise suppression</strong><small
+                >Reduces steady background noise</small
               ></span
             >
             <input
@@ -152,12 +152,12 @@
             />
           </label>
           <p class="settings-hint">
-            Значения выше 100% усиливают голос перед отправкой, но могут также
-            усилить шум.
+            Levels above 100% boost your voice but can also
+            increase noise.
           </p>
           {#if !('setSinkId' in HTMLMediaElement.prototype)}
             <p class="settings-hint">
-              Этот браузер использует системное устройство вывода.
+              This browser uses the system output device.
             </p>
           {/if}
           {#if deviceError}
@@ -167,7 +167,7 @@
       </section>
 
       <section class="settings-card">
-        <h2>Демонстрация экрана</h2>
+        <h2>Screen sharing</h2>
         {#if settings.data}
           <QualityForm
             value={settings.data.video_quality}

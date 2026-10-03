@@ -37,7 +37,7 @@ class MicrophoneGainProcessor implements TrackProcessor<Track.Kind.Audio, AudioP
   }
 
   private connect(track: MediaStreamTrack) {
-    if (!this.audioContext) throw new Error('AudioContext недоступен')
+    if (!this.audioContext) throw new Error('AudioContext unavailable')
 
     this.source = this.audioContext.createMediaStreamSource(new MediaStream([track]))
     this.gainNode = this.audioContext.createGain()

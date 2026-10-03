@@ -77,7 +77,7 @@ func New(db *sql.DB, cfg config.Config) (*Server, error) {
 		now:           time.Now,
 		newID:         uuid.NewString,
 		newInvite: func() (string, error) {
-			value := make([]byte, 8)
+			value := make([]byte, 24)
 			if _, err := rand.Read(value); err != nil {
 				return "", err
 			}
@@ -97,10 +97,21 @@ func (s *Server) Handler() http.Handler {
 	r.Group(func(r chi.Router) {
 		r.Use(middleware.Timeout(requestTimeout))
 
+		r.Group(func(r chi.Router) {
+			r.Use(s.requireRoomParticipant)
+			r.Get("/api/rooms/{inviteCode}", s.getRoom)
+			r.Post("/api/rooms/{inviteCode}/token", s.roomToken)
+			r.Get("/api/rooms/{inviteCode}/messages", s.listRoomMessages)
+			r.Post("/api/rooms/{inviteCode}/messages", s.createRoomMessage)
+		})
 		r.Get("/api/health", s.health)
 		r.Post("/api/livekit/webhook", s.liveKitWebhook)
 		r.Route("/api/auth", func(r chi.Router) {
 			r.Post("/login", s.login)
+			r.Post("/register", s.register)
+			r.Post("/desktop/start", s.startDesktopLogin)
+			r.Post("/desktop/exchange", s.exchangeDesktopLogin)
+			r.With(s.requireUser, s.requirePasswordChanged).Post("/desktop/approve", s.approveDesktopLogin)
 			r.Post("/passkey/login/begin", s.beginPasskeyLogin)
 			r.Post("/passkey/login/finish", s.finishPasskeyLogin)
 			r.With(s.requireUser).Post("/logout", s.logout)
@@ -132,10 +143,6 @@ func (s *Server) Handler() http.Handler {
 			r.Post("/api/calls/{callID}/decline", s.declineDirectCall)
 			r.Post("/api/calls/{callID}/end", s.endDirectCall)
 			r.Post("/api/rooms", s.createRoom)
-			r.Get("/api/rooms/{inviteCode}", s.getRoom)
-			r.Post("/api/rooms/{inviteCode}/token", s.roomToken)
-			r.Get("/api/rooms/{inviteCode}/messages", s.listRoomMessages)
-			r.Post("/api/rooms/{inviteCode}/messages", s.createRoomMessage)
 			r.Post("/api/presence", s.presence)
 		})
 	})
@@ -145,8 +152,9 @@ func (s *Server) Handler() http.Handler {
 		r.Use(s.requirePasswordChanged)
 		r.Get("/api/calls/events", s.streamCallEvents)
 		r.Get("/api/direct-messages/{userID}/events", s.streamDirectMessageEvents)
-		r.Get("/api/rooms/{inviteCode}/messages/events", s.streamRoomMessageEvents)
 	})
+
+	r.With(s.requireRoomParticipant).Get("/api/rooms/{inviteCode}/messages/events", s.streamRoomMessageEvents)
 
 	return r
 }
@@ -168,7 +176,7 @@ func (s *Server) verifyOrigin(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions {
 			if origin := r.Header.Get("Origin"); origin != "" && strings.TrimRight(origin, "/") != strings.TrimRight(s.cfg.AppOrigin, "/") {
-				writeError(w, http.StatusForbidden, "Недопустимый источник запроса")
+				writeError(w, http.StatusForbidden, "Invalid request origin")
 				return
 			}
 		}
@@ -180,7 +188,7 @@ func (s *Server) requireUser(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cookie, err := r.Cookie(sessionCookie)
 		if err != nil || cookie.Value == "" {
-			writeError(w, http.StatusUnauthorized, "Требуется вход")
+			writeError(w, http.StatusUnauthorized, "Sign-in required")
 			return
 		}
 		now := s.now()
@@ -190,12 +198,13 @@ func (s *Server) requireUser(next http.Handler) http.Handler {
 			ExpiresAt: now,
 		})
 		if errors.Is(err, sql.ErrNoRows) {
-			writeError(w, http.StatusUnauthorized, "Сессия истекла")
+			http.SetCookie(w, s.cookie("", s.now().Add(-time.Hour)))
+			writeError(w, http.StatusUnauthorized, "Session expired")
 			return
 		}
 		if err != nil {
 			slog.Error("load session", "error", err)
-			writeError(w, http.StatusInternalServerError, "Не удалось проверить сессию")
+			writeError(w, http.StatusInternalServerError, "Could not verify session")
 			return
 		}
 		if err := s.queries.TouchSession(r.Context(), dbgen.TouchSessionParams{TokenHash: tokenHash, LastSeenAt: now}); err != nil {
@@ -208,7 +217,7 @@ func (s *Server) requireUser(next http.Handler) http.Handler {
 func (s *Server) requirePasswordChanged(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if currentUser(r).MustChangePassword {
-			writeError(w, http.StatusForbidden, "Сначала измените временный пароль")
+			writeError(w, http.StatusForbidden, "Change your temporary password first")
 			return
 		}
 		next.ServeHTTP(w, r)
@@ -235,12 +244,12 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 	}
 	user, err := s.queries.GetUserByEmail(r.Context(), strings.TrimSpace(input.Email))
 	if err != nil || !auth.VerifyPassword(user.PasswordHash, input.Password) {
-		writeError(w, http.StatusUnauthorized, "Неверный email или пароль")
+		writeError(w, http.StatusUnauthorized, "Incorrect email or password")
 		return
 	}
 	if err := s.startSession(w, r, user.ID); err != nil {
 		slog.Error("create session", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось начать сессию")
+		writeError(w, http.StatusInternalServerError, "Could not start session")
 		return
 	}
 	writeJSON(w, http.StatusOK, publicUser(user))
@@ -299,17 +308,17 @@ func (s *Server) createRoom(w http.ResponseWriter, r *http.Request) {
 	}
 	input.Name = strings.TrimSpace(input.Name)
 	if len([]rune(input.Name)) < 2 || len([]rune(input.Name)) > 80 {
-		writeError(w, http.StatusUnprocessableEntity, "Название должно содержать от 2 до 80 символов")
+		writeError(w, http.StatusUnprocessableEntity, "Room name must be 2–80 characters")
 		return
 	}
 	invite, err := s.newInvite()
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Не удалось создать приглашение")
+		writeError(w, http.StatusInternalServerError, "Could not create invitation")
 		return
 	}
 	tx, err := s.db.BeginTx(r.Context(), nil)
 	if err != nil {
-		writeError(w, http.StatusInternalServerError, "Не удалось создать комнату")
+		writeError(w, http.StatusInternalServerError, "Could not create room")
 		return
 	}
 	defer tx.Rollback()
@@ -321,17 +330,17 @@ func (s *Server) createRoom(w http.ResponseWriter, r *http.Request) {
 	})
 	if err != nil {
 		slog.Error("create room", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось создать комнату")
+		writeError(w, http.StatusInternalServerError, "Could not create room")
 		return
 	}
 	if err := queries.AddRoomMember(r.Context(), dbgen.AddRoomMemberParams{RoomID: room.ID, UserID: ownerID, CreatedAt: now}); err != nil {
 		slog.Error("add room owner", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось создать комнату")
+		writeError(w, http.StatusInternalServerError, "Could not create room")
 		return
 	}
 	if err := tx.Commit(); err != nil {
 		slog.Error("commit room", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось создать комнату")
+		writeError(w, http.StatusInternalServerError, "Could not create room")
 		return
 	}
 	writeJSON(w, http.StatusCreated, publicRoom(room))
@@ -353,14 +362,14 @@ func (s *Server) roomToken(w http.ResponseWriter, r *http.Request) {
 	if room.Kind == "direct" {
 		member, err := s.queries.IsRoomMember(r.Context(), dbgen.IsRoomMemberParams{RoomID: room.ID, UserID: user.ID})
 		if err != nil || !member {
-			writeError(w, http.StatusForbidden, "Этот звонок доступен только его участникам")
+			writeError(w, http.StatusForbidden, "This call is only available to its participants")
 			return
 		}
 	}
 	token, err := s.issuer.Issue(room.ID, user.ID, user.DisplayName)
 	if err != nil {
 		slog.Error("issue livekit token", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось подключиться к звонку")
+		writeError(w, http.StatusInternalServerError, "Could not join call")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -371,28 +380,28 @@ func (s *Server) roomToken(w http.ResponseWriter, r *http.Request) {
 func (s *Server) findRoom(w http.ResponseWriter, r *http.Request) (dbgen.Room, bool) {
 	code := chi.URLParam(r, "inviteCode")
 	if len(code) < 8 || len(code) > 32 {
-		writeError(w, http.StatusNotFound, "Комната не найдена")
+		writeError(w, http.StatusNotFound, "Room not found")
 		return dbgen.Room{}, false
 	}
 	room, err := s.queries.GetRoomByInviteCode(r.Context(), code)
 	if errors.Is(err, sql.ErrNoRows) {
-		writeError(w, http.StatusNotFound, "Комната не найдена")
+		writeError(w, http.StatusNotFound, "Room not found")
 		return dbgen.Room{}, false
 	}
 	if err != nil {
 		slog.Error("find room", "error", err)
-		writeError(w, http.StatusInternalServerError, "Не удалось загрузить комнату")
+		writeError(w, http.StatusInternalServerError, "Could not load room")
 		return dbgen.Room{}, false
 	}
 	if room.Kind == "direct" {
 		member, err := s.queries.IsRoomMember(r.Context(), dbgen.IsRoomMemberParams{RoomID: room.ID, UserID: currentUser(r).ID})
 		if err != nil {
 			slog.Error("check room membership", "error", err)
-			writeError(w, http.StatusInternalServerError, "Не удалось проверить доступ к звонку")
+			writeError(w, http.StatusInternalServerError, "Could not verify call access")
 			return dbgen.Room{}, false
 		}
 		if !member {
-			writeError(w, http.StatusNotFound, "Комната не найдена")
+			writeError(w, http.StatusNotFound, "Room not found")
 			return dbgen.Room{}, false
 		}
 	}
@@ -401,7 +410,7 @@ func (s *Server) findRoom(w http.ResponseWriter, r *http.Request) (dbgen.Room, b
 
 func (s *Server) health(w http.ResponseWriter, r *http.Request) {
 	if err := s.db.PingContext(r.Context()); err != nil {
-		writeError(w, http.StatusServiceUnavailable, "База данных недоступна")
+		writeError(w, http.StatusServiceUnavailable, "Database unavailable")
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
@@ -412,11 +421,11 @@ func decodeJSON(w http.ResponseWriter, r *http.Request, target any) bool {
 	decoder := json.NewDecoder(r.Body)
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(target); err != nil {
-		writeError(w, http.StatusBadRequest, "Некорректный JSON")
+		writeError(w, http.StatusBadRequest, "Invalid JSON")
 		return false
 	}
 	if err := decoder.Decode(&struct{}{}); !errors.Is(err, io.EOF) {
-		writeError(w, http.StatusBadRequest, "JSON должен содержать ровно один объект")
+		writeError(w, http.StatusBadRequest, "JSON must contain exactly one object")
 		return false
 	}
 	return true

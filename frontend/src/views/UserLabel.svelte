@@ -6,6 +6,6 @@
 
 <span class="user-label"
   ><strong>{user.display_name}</strong><small
-    >@{user.username}{detail ? ` · ${detail}` : ''}</small
+    >{user.username}{detail ? ` · ${detail}` : ''}</small
   ></span
 >

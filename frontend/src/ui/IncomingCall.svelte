@@ -66,29 +66,29 @@
   <div
     class="incoming-call"
     role="dialog"
-    aria-label={`Входящий звонок от ${incoming.peer.display_name}`}
+    aria-label={`Incoming call from ${incoming.peer.display_name}`}
   >
     <div class="participant-avatar">{initials(incoming.peer.display_name)}</div>
     <div class="min-w-0 flex-1">
       <p
         class="text-xs font-semibold uppercase tracking-[.12em] text-ink-muted"
       >
-        Входящий звонок
+        Incoming call
       </p>
       <strong class="mt-1 block truncate">{incoming.peer.display_name}</strong
-      ><span class="text-xs text-ink-muted">@{incoming.peer.username}</span>
+      ><span class="text-xs text-ink-muted">{incoming.peer.username}</span>
     </div>
     <button
       class="call-answer"
       onclick={() => accept.mutate()}
       disabled={accept.isPending}
-      aria-label="Принять"><Phone size={19} /></button
+      aria-label="Accept"><Phone size={19} /></button
     >
     <button
       class="call-decline"
       onclick={() => decline.mutate()}
       disabled={decline.isPending}
-      aria-label="Отклонить"><PhoneOff size={19} /></button
+      aria-label="Decline"><PhoneOff size={19} /></button
     >
   </div>
 {/if}

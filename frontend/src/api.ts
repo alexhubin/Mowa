@@ -87,7 +87,7 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   })
 
   if (!response.ok) {
-    let message = 'Что-то пошло не так'
+    let message = 'Something went wrong'
     try {
       const body = (await response.json()) as { error?: string }
       if (body.error) message = body.error

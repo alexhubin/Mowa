@@ -61,7 +61,7 @@
     sendMessage.mutate(message)
   }
 
-  const messageTime = new Intl.DateTimeFormat('ru-RU', {
+  const messageTime = new Intl.DateTimeFormat('en-US', {
     hour: '2-digit',
     minute: '2-digit',
   })
@@ -78,27 +78,27 @@
     class="direct-chat-modal"
     role="dialog"
     aria-modal="true"
-    aria-label={`Диалог с ${friend.display_name}`}
+    aria-label={`Chat with ${friend.display_name}`}
   >
     <header class="direct-chat-header">
       <Avatar name={friend.display_name} online={friend.online} />
       <UserLabel
         user={friend}
-        detail={friend.online ? 'в сети' : 'сообщение будет доставлено позже'}
+        detail={friend.online ? 'online' : 'message will be delivered later'}
       />
-      <button type="button" onclick={onClose} aria-label="Закрыть диалог"
+      <button type="button" onclick={onClose} aria-label="Close chat"
         ><X size={19} /></button
       >
     </header>
     <div class="chat-messages" aria-live="polite">
       {#if messages.isLoading}
-        <p class="chat-state">Загружаем сообщения…</p>
+        <p class="chat-state">Loading messages…</p>
       {/if}
       {#if messages.error}
-        <p class="chat-state error">Не удалось загрузить сообщения</p>
+        <p class="chat-state error">Could not load messages</p>
       {/if}
       {#if !messages.isLoading && !messages.error && messages.data?.length === 0}
-        <p class="chat-state">Здесь пока тихо. Напишите первым.</p>
+        <p class="chat-state">No messages yet.</p>
       {/if}
       {#each messages.data ?? [] as message (message.id)}
         <article
@@ -107,7 +107,7 @@
           <div class="chat-message-heading">
             <strong
               >{message.author.id === userID
-                ? 'Вы'
+                ? 'You'
                 : message.author.display_name}</strong
             ><time datetime={message.created_at}
               >{messageTime.format(new Date(message.created_at))}</time
@@ -131,12 +131,12 @@
         }}
         maxlength={2000}
         rows={2}
-        placeholder={friend.online ? 'Сообщение…' : 'Сообщение офлайн-другу…'}
-        aria-label="Сообщение"></textarea>
+        placeholder={friend.online ? 'Message…' : 'Message an offline friend…'}
+        aria-label="Message"></textarea>
       <button
         type="submit"
         disabled={!body.trim() || sendMessage.isPending}
-        aria-label="Отправить сообщение"><Send size={18} /></button
+        aria-label="Send message"><Send size={18} /></button
       >
       {#if body.length > 1800}
         <small>{body.length}/2000</small>

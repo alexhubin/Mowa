@@ -103,6 +103,9 @@ class MockEventSource extends EventTarget {
   }
 }
 
+let anonymous = false
+let guestSession: { id: string; display_name: string } | null = null
+let guestJoinError = false
 let tokenResponse: Promise<Response> | undefined
 const user = {
   id: 'me',
@@ -117,6 +120,9 @@ const json = (body: unknown) =>
   })
 
 beforeEach(() => {
+  anonymous = false
+  guestSession = null
+  guestJoinError = false
   media.rooms = []
   tokenResponse = undefined
   MockEventSource.instances = []
@@ -131,7 +137,19 @@ beforeEach(() => {
   vi.stubGlobal(
     'fetch',
     vi.fn(async (path: string, init?: RequestInit) => {
-      if (path === '/api/auth/me') return json(user)
+      if (path === '/api/auth/me') return anonymous ? new Response('{}', { status: 401 }) : json(user)
+      if (path.endsWith('/guest')) {
+        if (init?.method === 'POST') {
+          if (guestJoinError) return new Response(JSON.stringify({ error: 'Комната уже закрыта' }), { status: 404 })
+          guestSession = { id: 'guest_me', display_name: JSON.parse(String(init.body)).display_name }
+          return json(guestSession)
+        }
+        if (init?.method === 'DELETE') {
+          guestSession = null
+          return new Response(null, { status: 204 })
+        }
+        return guestSession ? json(guestSession) : new Response('{}', { status: 401 })
+      }
       if (path === '/api/calls') return json([])
       if (path === '/api/account/settings')
         return json({ video_quality: 'high' })
@@ -178,9 +196,9 @@ afterEach(() => {
 async function join() {
   render(App)
   await fireEvent.click(
-    await screen.findByRole('button', { name: 'Войти в разговор' }),
+    await screen.findByRole('button', { name: 'Join call' }),
   )
-  await screen.findByRole('button', { name: 'Выключить микрофон' })
+  await screen.findByRole('button', { name: 'Mute microphone' })
   expect(document.exitFullscreen).not.toHaveBeenCalled()
   return media.rooms[0]
 }
@@ -189,16 +207,16 @@ describe('Svelte LiveKit lifecycle', () => {
   it('reacts to mutable participant and screen-track events and releases media on navigation', async () => {
     const room = await join()
     await fireEvent.click(
-      screen.getByRole('button', { name: 'Выключить микрофон' }),
+      screen.getByRole('button', { name: 'Mute microphone' }),
     )
-    await screen.findByRole('button', { name: 'Включить микрофон' })
+    await screen.findByRole('button', { name: 'Unmute microphone' })
     room.localParticipant.isSpeaking = true
     room.emit(RoomEvent.ActiveSpeakersChanged)
-    await screen.findByText('говорит')
+    await screen.findByText('speaking')
     await fireEvent.click(
-      screen.getByRole('button', { name: 'Показать экран' }),
+      screen.getByRole('button', { name: 'Share screen' }),
     )
-    await screen.findByRole('button', { name: 'Остановить показ экрана' })
+    await screen.findByRole('button', { name: 'Stop sharing' })
     const track = room.localParticipant.getTrackPublication(
       Track.Source.ScreenShare,
     )!.track!
@@ -209,7 +227,7 @@ describe('Svelte LiveKit lifecycle', () => {
       source.url.endsWith('/messages/events'),
     )!
     navigate({ to: '/' })
-    await screen.findByRole('heading', { name: 'Друзья' })
+    await screen.findByRole('heading', { name: 'Friends' })
     expect(track.stop).toHaveBeenCalledOnce()
     expect(track.detach).toHaveBeenCalledOnce()
     expect(room.disconnect).toHaveBeenCalledOnce()
@@ -229,21 +247,21 @@ describe('Svelte LiveKit lifecycle', () => {
     room.emit(RoomEvent.ParticipantConnected)
     expect(
       await screen.findByRole('button', {
-        name: 'Другой участник уже демонстрирует экран',
+        name: 'Another participant is already sharing',
       }),
     ).toBeDisabled()
-    await fireEvent.click(screen.getByRole('button', { name: 'Открыть чат' }))
-    const composer = screen.getByRole('textbox', { name: 'Сообщение' })
+    await fireEvent.click(screen.getByRole('button', { name: 'Open chat' }))
+    const composer = screen.getByRole('textbox', { name: 'Message' })
     await fireEvent.input(composer, {
-      target: { value: 'Сообщение в комнате' },
+      target: { value: 'Message в комнате' },
     })
     await fireEvent.submit(composer.closest('form')!)
-    await screen.findByText('Сообщение в комнате')
+    await screen.findByText('Message в комнате')
     expect(composer).toHaveValue('')
     remote.publications.clear()
     room.emit(RoomEvent.TrackUnpublished)
     expect(
-      await screen.findByRole('button', { name: 'Показать экран' }),
+      await screen.findByRole('button', { name: 'Share screen' }),
     ).toBeEnabled()
   })
 
@@ -254,12 +272,26 @@ describe('Svelte LiveKit lifecycle', () => {
     })
     render(App)
     await fireEvent.click(
-      await screen.findByRole('button', { name: 'Войти в разговор' }),
+      await screen.findByRole('button', { name: 'Join call' }),
     )
     navigate({ to: '/' })
-    await screen.findByRole('heading', { name: 'Друзья' })
+    await screen.findByRole('heading', { name: 'Friends' })
     resolveToken(json({ token: 'late-token', server_url: 'wss://example.com' }))
     await tokenResponse
     await waitFor(() => expect(media.rooms).toHaveLength(0))
+  })
+})
+
+
+describe('Account invitation', () => {
+  it('requires login even when an old guest cookie exists', async () => {
+    anonymous = true
+    guestSession = { id: 'guest_me', display_name: 'Соня' }
+    render(App)
+    await screen.findByRole('heading', { name: 'Sign in' })
+    expect(route.pathname).toBe('/login')
+    expect(new URLSearchParams(location.search).get('next')).toBe('/r/MOWA-TEST')
+    expect(media.rooms).toHaveLength(0)
+    expect(vi.mocked(fetch).mock.calls.some(([path]) => String(path).endsWith('/guest') || String(path).endsWith('/token'))).toBe(false)
   })
 })

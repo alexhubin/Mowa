@@ -52,7 +52,7 @@
     try {
       devices = await requestAndListAudioDevices()
     } catch {
-      error = 'Браузер не дал доступ к аудиоустройствам.'
+      error = 'Audio device access denied.'
     }
   }
   async function selectDevice(
@@ -70,8 +70,8 @@
     } catch {
       error =
         kind === 'audioinput'
-          ? 'Не удалось переключить микрофон.'
-          : 'Этот браузер не поддерживает переключение устройства вывода.'
+          ? 'Could not switch microphone.'
+          : 'This browser cannot switch output devices.'
     }
   }
   function setMicrophoneGain(value: number) {
@@ -84,7 +84,7 @@
     if (!track) return
     void applyMicrophoneGain(track, value).catch(
       () =>
-        (error = 'Не удалось изменить громкость микрофона в этом браузере.'),
+        (error = 'Could not change microphone volume in this browser.'),
     )
   }
   async function setNoiseSuppression(enabled: boolean) {
@@ -103,7 +103,7 @@
       })
     } catch {
       error =
-        'Браузер не поддерживает изменение шумоподавления во время звонка.'
+        'This browser cannot change noise suppression during a call.'
     }
   }
 
@@ -133,15 +133,15 @@
   >
     <div class="section-heading">
       <div>
-        <span class="section-kicker">Без выхода из комнаты</span>
+        <span class="section-kicker">During your call</span>
         <h2
           id="call-settings-title"
           class="font-display text-3xl font-semibold"
         >
-          Настройки звонка
+          Call settings
         </h2>
       </div>
-      <button class="mini-action" onclick={onClose} aria-label="Закрыть"
+      <button class="mini-action" onclick={onClose} aria-label="Close"
         ><X size={18} /></button
       >
     </div>
@@ -149,17 +149,17 @@
       type="button"
       class="button-secondary compact mt-6"
       onclick={allowDevices}
-      ><SlidersHorizontal size={17} /> Обновить устройства</button
+      ><SlidersHorizontal size={17} /> Refresh devices</button
     >
     <div class="mt-5 space-y-4">
       <CallDeviceSelect
-        label="Микрофон"
+        label="Microphone"
         value={deviceValues.audioInputId}
         devices={devices.inputs}
         onChange={(value) => selectDevice('audioInputId', 'audioinput', value)}
       />
       <CallDeviceSelect
-        label="Наушники или динамики"
+        label="Headphones or speakers"
         value={deviceValues.audioOutputId}
         devices={devices.outputs}
         onChange={(value) =>
@@ -168,7 +168,7 @@
       />
       <label class="range-setting">
         <span
-          >Громкость микрофона <strong>{deviceValues.microphoneGain}%</strong
+          >Microphone volume <strong>{deviceValues.microphoneGain}%</strong
           ></span
         >
         <input
@@ -183,8 +183,8 @@
       </label>
       <label class="toggle-setting">
         <span
-          ><strong>Шумоподавление</strong><small
-            >Убирает постоянный фоновый шум средствами браузера</small
+          ><strong>Noise suppression</strong><small
+            >Reduces steady background noise</small
           ></span
         >
         <input
@@ -196,7 +196,7 @@
         />
       </label>
       <label class="field-label"
-        >Качество демонстрации экрана<select
+        >Screen sharing quality<select
           class="text-input"
           value={settings?.video_quality ?? 'high'}
           oninput={(event) =>
@@ -204,15 +204,15 @@
               event.currentTarget.value as AccountSettings['video_quality'],
             )}
           disabled={quality.isPending}
-          ><option value="low">720p · 30 кадров/с</option><option value="high"
-            >1080p · 30 кадров/с</option
+          ><option value="low">720p · 30 fps</option><option value="high"
+            >1080p · 30 fps</option
           ></select
         ></label
       >
       <p class="settings-hint">
-        Аудионастройки применяются сразу, без выхода из разговора. Значения
-        громкости выше 100% могут также усилить шум. Качество применяется при
-        следующем запуске демонстрации экрана.
+        Audio settings apply immediately. Microphone levels
+        above 100% can increase noise. Video quality applies
+        the next time you share your screen.
       </p>
       {#if error || quality.error}
         <p class="error-note">

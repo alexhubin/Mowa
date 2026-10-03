@@ -43,7 +43,7 @@
     queryKey: ['user-search', search],
     queryFn: () =>
       api<FriendUser[]>(
-        `/api/users/search?q=${encodeURIComponent(search.trim().replace(/^@/, ''))}`,
+        `/api/users/search?q=${encodeURIComponent(search.trim())}`,
       ),
     enabled: search.trim().length >= 2,
   }))
@@ -88,7 +88,7 @@
     mutationFn: () =>
       api<RoomInfo>('/api/rooms', {
         method: 'POST',
-        body: JSON.stringify({ name: `Комната ${user.display_name}` }),
+        body: JSON.stringify({ name: `${user.display_name}'s room` }),
       }),
     onSuccess: (room) =>
       navigate({
@@ -111,16 +111,16 @@
 
 <main class="app-page friends-page">
   <header class="page-heading">
-    <h1>Друзья</h1>
+    <h1>Friends</h1>
     <div class="heading-actions">
       <button class="button-secondary" onclick={() => (joinOpen = true)}
-        >Войти по коду</button
+        >Join by code</button
       >
       <button
         class="button-primary"
         onclick={() => createRoom.mutate()}
         disabled={createRoom.isPending}
-        >Создать комнату <ArrowUpRight size={17} /></button
+        >Create room <ArrowUpRight size={17} /></button
       >
     </div>
   </header>
@@ -129,10 +129,10 @@
     <input
       value={search}
       oninput={(event) => (search = event.currentTarget.value)}
-      placeholder="Добавить друга по нику, например @sonya"
-      aria-label="Найти друга"
+      placeholder="Find a friend by username, e.g. sonya"
+      aria-label="Find a friend"
     />
-    <span class="search-action-label">Выберите человека ниже</span>
+    <span class="search-action-label">Choose a person below</span>
   </div>
   {#if createRoom.error || startCall.error || sendRequest.error}
     <p class="error-note dashboard-error">
@@ -143,7 +143,7 @@
   {/if}
 
   {#if search.trim().length >= 2}
-    <section class="search-results" aria-label="Результаты поиска">
+    <section class="search-results" aria-label="Search results">
       {#if searchQuery.isLoading}
         <div class="skeleton h-16"></div>
       {/if}
@@ -155,7 +155,7 @@
         />
       {/each}
       {#if searchQuery.data?.length === 0}
-        <EmptyList text="Никого не нашли." />
+        <EmptyList text="No results." />
       {/if}
     </section>
   {/if}
@@ -169,28 +169,28 @@
           params: { inviteCode: outgoing.invite_code },
         })}
       ><span class="live-dot"></span><span
-        >Звоним <strong>{outgoing.peer.display_name}</strong>…</span
+        >Calling <strong>{outgoing.peer.display_name}</strong>…</span
       ><ArrowUpRight size={18} /></button
     >
   {/if}
 
   {#if requests.length > 0}
     <section class="friends-section requests-section">
-      <h2>Заявки в друзья <span>{requests.length}</span></h2>
+      <h2>Friend requests <span>{requests.length}</span></h2>
       <div class="request-list">
         {#each requests ?? [] as request (request.id)}
           <article class="request-card">
             <Avatar name={request.user.display_name} />
-            <UserLabel user={request.user} detail="хочет добавить вас" />
+            <UserLabel user={request.user} detail="sent you a friend request" />
             <button
               class="button-primary compact"
               onclick={() => acceptRequest.mutate(request.id)}
-              ><Check size={16} /> Принять</button
+              ><Check size={16} /> Accept</button
             >
             <button
               class="button-secondary compact"
               onclick={() => declineRequest.mutate(request.id)}
-              ><X size={16} /> Отклонить</button
+              ><X size={16} /> Decline</button
             >
           </article>
         {/each}
@@ -199,7 +199,7 @@
   {/if}
 
   <section class="friends-section">
-    <h2>Все друзья <span>{friends.data?.friends.length ?? 0}</span></h2>
+    <h2>All friends <span>{friends.data?.friends.length ?? 0}</span></h2>
     <div class="friends-table">
       {#if friends.isLoading}
         <div class="skeleton h-40"></div>
@@ -213,11 +213,11 @@
         />
       {/each}
       {#if friends.data?.friends.length === 0}
-        <EmptyList text="Здесь появятся люди, которых вы добавите." />
+        <EmptyList text="Your friends will appear here." />
       {/if}
       <footer>
-        Сообщения можно отправлять и офлайн-друзьям. Для звонка друг должен быть
-        в сети.
+        You can message offline friends. Calls require them to be
+        online.
       </footer>
     </div>
   </section>
@@ -231,21 +231,21 @@
       }}
     >
       <form class="simple-modal" onsubmit={joinRoom}>
-        <h2>Войти в комнату</h2>
-        <p>Вставьте код комнаты или ссылку-приглашение.</p>
+        <h2>Join a room</h2>
+        <p>Paste a room code or invitation link.</p>
         <input
           class="text-input"
           use:focusOnMount
           value={joinValue}
           oninput={(event) => (joinValue = event.currentTarget.value)}
-          placeholder="MOWA-XXXX или ссылка"
+          placeholder="Room code or invitation link"
         />
         <div class="modal-actions">
           <button
             type="button"
             class="button-secondary"
-            onclick={() => (joinOpen = false)}>Отмена</button
-          ><button class="button-primary">Войти</button>
+            onclick={() => (joinOpen = false)}>Cancel</button
+          ><button class="button-primary">Join</button>
         </div>
       </form>
     </div>

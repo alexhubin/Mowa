@@ -56,7 +56,7 @@ func (b *eventBroker) notify(topics ...string) {
 func streamEvents(w http.ResponseWriter, r *http.Request, broker *eventBroker, topic, eventName string) {
 	flusher, ok := w.(http.Flusher)
 	if !ok {
-		writeError(w, http.StatusInternalServerError, "Поток событий недоступен")
+		writeError(w, http.StatusInternalServerError, "Event stream unavailable")
 		return
 	}
 	w.Header().Set("Content-Type", "text/event-stream")

@@ -193,8 +193,8 @@ func TestProtectedEndpointsAndOrigin(t *testing.T) {
 	server, client, _ := newTestServer(t)
 
 	response := doJSON(t, client, http.MethodPost, server.URL+"/api/auth/register", map[string]string{})
-	if response.StatusCode != http.StatusNotFound {
-		t.Fatalf("public register status = %d, want 404", response.StatusCode)
+	if response.StatusCode != http.StatusUnprocessableEntity {
+		t.Fatalf("invalid register status = %d, want 422", response.StatusCode)
 	}
 	response.Body.Close()
 

@@ -39,33 +39,33 @@
   type Theme = 'light' | 'dark'
 </script>
 
-{#if user && !user.must_change_password && !pathname.startsWith('/r/') && pathname !== '/login' && pathname !== '/first-password'}
+{#if user && !user.must_change_password && !pathname.startsWith('/r/') && pathname !== '/login' && pathname !== '/register' && pathname !== '/desktop-login' && pathname !== '/first-password'}
   <aside class="app-sidebar">
-    <a href="/" class="brand" aria-label="Mowa — друзья">
+    <a href="/" class="brand" aria-label="Mowa — friends">
       <span class="brand-dot" aria-hidden="true"></span>
       <span>mowa</span>
     </a>
 
-    <nav class="sidebar-nav" aria-label="Основная навигация">
+    <nav class="sidebar-nav" aria-label="Main navigation">
       <a href="/" class={`sidebar-link ${pathname === '/' ? 'active' : ''}`}
-        >Друзья</a
+        >Friends</a
       >
       <a
         href="/settings"
         class={`sidebar-link ${pathname === '/settings' ? 'active' : ''}`}
-        >Настройки</a
+        >Settings</a
       >
     </nav>
 
     <div class="sidebar-spacer"></div>
-    <div class="theme-switch" aria-label="Цветовая тема">
+    <div class="theme-switch" aria-label="Appearance">
       <button
         class={theme === 'light' ? 'active' : ''}
-        onclick={() => (theme = 'light')}>Светлая</button
+        onclick={() => (theme = 'light')}>Light</button
       >
       <button
         class={theme === 'dark' ? 'active' : ''}
-        onclick={() => (theme = 'dark')}>Тёмная</button
+        onclick={() => (theme = 'dark')}>Dark</button
       >
     </div>
 
@@ -73,14 +73,14 @@
       <span class="sidebar-avatar">{initials(user.display_name)}<i></i></span>
       <span class="sidebar-user"
         ><strong>{user.display_name}</strong><small
-          >@{user.username} · в сети</small
+          >{user.username} · online</small
         ></span
       >
       <button
         class="sidebar-logout"
         onclick={() => logout.mutate()}
-        aria-label="Выйти"
-        title="Выйти"><LogOut size={17} /></button
+        aria-label="Sign out"
+        title="Sign out"><LogOut size={17} /></button
       >
     </div>
   </aside>

@@ -34,7 +34,7 @@ export async function registerPasskey(name: string) {
       body: JSON.stringify(credential),
     })
   } catch (error) {
-    throw friendlyPasskeyError(error, 'Не удалось добавить passkey')
+    throw friendlyPasskeyError(error, 'Could not add passkey')
   }
 }
 
@@ -48,18 +48,18 @@ export async function loginWithPasskey() {
       body: JSON.stringify(credential),
     })
   } catch (error) {
-    throw friendlyPasskeyError(error, 'Не удалось войти по passkey')
+    throw friendlyPasskeyError(error, 'Could not sign in with a passkey')
   }
 }
 
 function ensurePasskeysSupported() {
-  if (!passkeysSupported()) throw new Error('Этот браузер или соединение не поддерживает passkey')
+  if (!passkeysSupported()) throw new Error('This browser or connection does not support passkeys')
 }
 
 function friendlyPasskeyError(error: unknown, fallback: string) {
   if (!(error instanceof Error)) return new Error(fallback)
-  if (error.name === 'NotAllowedError') return new Error('Операция отменена или время подтверждения истекло')
-  if (error.name === 'InvalidStateError') return new Error('Этот passkey уже добавлен')
-  if (error.name === 'SecurityError') return new Error('Passkey недоступен для этого домена')
+  if (error.name === 'NotAllowedError') return new Error('Request cancelled or timed out')
+  if (error.name === 'InvalidStateError') return new Error('This passkey has already been added')
+  if (error.name === 'SecurityError') return new Error('Passkeys are unavailable for this domain')
   return error
 }

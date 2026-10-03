@@ -4,6 +4,7 @@
   import AppHeader from './ui/AppHeader.svelte'
   import IncomingCall from './ui/IncomingCall.svelte'
   import HomePage from './views/HomePage.svelte'
+  import DesktopLoginPage from './views/DesktopLoginPage.svelte'
   import AuthPage from './views/AuthPage.svelte'
   import FirstPasswordPage from './views/FirstPasswordPage.svelte'
   import SettingsPage from './views/SettingsPage.svelte'
@@ -32,8 +33,10 @@
     <AppHeader />
     {#if route.pathname === '/'}
       <HomePage />
-    {:else if route.pathname === '/login'}
+    {:else if route.pathname === '/login' || route.pathname === '/register'}
       <AuthPage />
+    {:else if route.pathname === '/desktop-login'}
+      <DesktopLoginPage />
     {:else if route.pathname === '/first-password'}
       <FirstPasswordPage />
     {:else if route.pathname === '/settings'}
