@@ -28,7 +28,7 @@ There is no camera UI. LiveKit tokens do not prohibit video publishing at the pr
 ## Architecture
 
 ```text
-Browser ── HTTPS ──> Caddy ──> React / Go API ──> PostgreSQL 18
+Browser ── HTTPS ──> Caddy ──> Svelte / Go API ──> PostgreSQL 18.6
    │                                 │
    │          short-lived JWT <──────┘
    │
@@ -39,11 +39,11 @@ The API never proxies audio or screen-sharing traffic. It validates cookie sessi
 
 ## Tech stack
 
-- Go 1.26, `chi`, `database/sql`, the pure-Go `pgx` driver, and `go-webauthn`
-- PostgreSQL 18; the backend is built with `CGO_ENABLED=0`
+- Go 1.27.1, `chi`, `database/sql`, the pure-Go `pgx` driver, and `go-webauthn`
+- PostgreSQL 18.6; the backend is built with `CGO_ENABLED=0`
 - `sqlc` for type-safe queries and `goose` for embedded migrations
-- Node.js 24, React, TypeScript, Vite, TanStack Router, TanStack Query, and Tailwind CSS
-- LiveKit Server, Docker Compose, and Caddy
+- Node.js 24, Svelte 5, TypeScript, Vite, TanStack Svelte Query, and Tailwind CSS
+- LiveKit Server 1.13.7, Docker Compose, and Caddy
 
 ## Local setup
 
@@ -62,6 +62,34 @@ Verify the deployment:
 curl http://localhost/api/health
 docker compose ps
 ```
+
+### Docker Desktop (macOS / Windows)
+
+Use the Desktop override for testing in browsers on the same computer. It puts
+LiveKit on the Compose bridge network, publishes its signaling and media ports on
+loopback, and delivers webhooks directly to the API container. Docker Desktop's
+optional host networking setting is not required. Compose 2.24.4+ is required.
+
+```bash
+docker compose -f compose.yaml -f compose.desktop.yaml up --build -d
+docker compose -f compose.yaml -f compose.desktop.yaml ps
+curl http://localhost/api/health
+```
+
+Open [http://localhost](http://localhost). The override fixes the local origins
+and LiveKit URL even if `.env` contains production addresses. Create a local user
+with the command below, adding `-f compose.yaml -f compose.desktop.yaml` after
+`docker compose`. Password changes, profiles, messages, and rooms persist in the
+local PostgreSQL volume.
+
+Stop this stack without removing its data:
+
+```bash
+docker compose -f compose.yaml -f compose.desktop.yaml down
+```
+
+The Desktop override is for this computer only; use the production configuration
+for access from other devices.
 
 ### Create a user
 
@@ -104,7 +132,7 @@ npm test
 npm run build
 ```
 
-`make test` starts an isolated PostgreSQL 18 instance through the Compose test profile and runs the API integration tests. Vite proxies `/api` to `localhost:8080`. To run the API outside Compose, provide an accessible PostgreSQL DSN:
+`make test` starts an isolated PostgreSQL 18.6 instance through the Compose test profile and runs the API integration tests. Vite proxies `/api` to `localhost:8080`. To run the API outside Compose, provide an accessible PostgreSQL DSN:
 
 ```bash
 DATABASE_URL='postgres://mova:password@localhost:5432/mova?sslmode=disable' go run ./cmd/api
@@ -233,7 +261,7 @@ internal/database/migrations/    PostgreSQL goose migrations
 internal/database/queries/       sqlc SQL queries
 internal/database/dbgen/         Generated Go code
 internal/media/                  LiveKit JWT issuance
-frontend/                        React application
+frontend/                        Svelte application
 deploy/Caddyfile                 Edge routing and TLS
 compose.yaml                     Full local/production stack
 ```

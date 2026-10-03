@@ -2,7 +2,7 @@ name: mova
 
 services:
   postgres:
-    image: postgres:18-alpine
+    image: postgres:18.6-alpine
     restart: unless-stopped
     environment:
       POSTGRES_DB: mova
@@ -48,7 +48,7 @@ services:
       - app
 
   backend-test:
-    image: golang:1.26-alpine
+    image: golang:1.27.1-alpine
     profiles: ["test"]
     working_dir: /src
     environment:
@@ -97,7 +97,7 @@ services:
       - app
 
   livekit:
-    image: livekit/livekit-server:v1.13.4
+    image: livekit/livekit-server:v1.13.7
     restart: unless-stopped
     network_mode: host
     environment:
