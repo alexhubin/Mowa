@@ -106,10 +106,7 @@ services:
           udp_port: 7882
           use_external_ip: true
         turn:
-          enabled: true
-          udp_port: 3478
-          relay_range_start: 40000
-          relay_range_end: 40100
+          enabled: false
         keys:
           ${LIVEKIT_API_KEY:?set LIVEKIT_API_KEY in .env}: ${LIVEKIT_API_SECRET:?set LIVEKIT_API_SECRET in .env}
 

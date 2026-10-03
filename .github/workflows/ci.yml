@@ -173,7 +173,7 @@ jobs:
       cancel-in-progress: false
     environment:
       name: production
-      url: https://mova.hubindev.cc
+      url: https://mowa.hubindev.cc
     steps:
       - uses: actions/checkout@v7
 
@@ -230,8 +230,8 @@ jobs:
           pin WEB_IMAGE "$WEB_IMAGE"
 
           docker compose -f compose.vps.yaml pull api web
-          # postgres and livekit are byte-identical to what is running, so this
-          # replaces api and web only — live calls survive a deploy.
+          # Unchanged services are preserved. Changes to the LiveKit image or
+          # configuration recreate it and interrupt active calls.
           docker compose -f compose.vps.yaml up -d --remove-orphans
           REMOTE
 
@@ -244,7 +244,7 @@ jobs:
           incoming=/opt/gateway/staging/mova.caddy.upload
           trap 'rm -f "$incoming"' EXIT
           /opt/gateway/deploy-site.sh \
-            mova "$incoming" https://mova.hubindev.cc/api/health
+            mova "$incoming" https://mowa.hubindev.cc/api/health
           REMOTE
 
       # Over the internal network, so this reflects the containers themselves
@@ -270,7 +270,7 @@ jobs:
           REMOTE
 
       # Retried: Caddy's active health check runs every 10s, so it still counts
-      # the API as down for a moment after the container is replaced. The two
+      # the API as down for a moment after the container is replaced. Current
       # neighbours are checked too — the Caddy reload above is shared with them.
       - name: Verify every site is reachable through Caddy
         run: |
@@ -284,8 +284,9 @@ jobs:
             echo "::error::$1 is not reachable through Caddy"
             return 1
           }
-          check https://mova.hubindev.cc/api/health
-          check https://mova.hubindev.cc/
+          check https://mowa.hubindev.cc/api/health
+          check https://mowa.hubindev.cc/
           check https://livekit.hubindev.cc/
           check https://monitor.hubindev.cc/api/health
-          check https://api.roomsage.hubindev.cc/healthz
+          check https://pinyio-api.getinkzi.com/readyz
+          check https://getinkzi.com/api/health

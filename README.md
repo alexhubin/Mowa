@@ -189,11 +189,12 @@ WEBAUTHN_RP_NAME=Mowa
 
 Open these ports in the external firewall:
 
-- `80/tcp`, `443/tcp`, and `443/udp` — website, WSS, and HTTP/3
+- `80/tcp` and `443/tcp` — certificate validation, website, and WSS
+- `443/udp` — optional HTTP/3
 - `7881/tcp` — WebRTC over TCP
 - `7882/udp` — WebRTC UDP mux
-- `3478/udp` — built-in TURN over UDP
-- `40000:40100/udp` — restricted TURN relay port range
+
+TURN is disabled. Clients use UDP 7882 with TCP 7881 as a fallback. Networks that block both transports require a future TURN/TLS deployment.
 
 LiveKit uses `network_mode: host` so it can advertise correct WebRTC candidates without routing media through Docker NAT. Before starting the stack, make sure these ports and ports `80`/`443` are not already occupied by another project. If the server already has a shared reverse proxy, do not start the `caddy` service from this Compose configuration without an override. Connect `api:8080`, `web:8080`, and LiveKit at `127.0.0.1:7880` to the existing proxy instead.
 
@@ -208,7 +209,7 @@ curl -fsS https://mova.example.com/api/health
 
 ### Continuous deployment to the shared VPS
 
-`mova.hubindev.cc` and `livekit.hubindev.cc` run on a VPS shared with other projects, and every push to `main` deploys there through [`.github/workflows/ci.yml`](.github/workflows/ci.yml). The checks — Go tests against a real PostgreSQL, frontend lint/test/build, `sqlc diff`, and Caddy validation — run in parallel with the image builds; only the deploy waits for all of them.
+`mowa.hubindev.cc` and `livekit.hubindev.cc` run on a VPS shared with other projects, and every push to `main` deploys there through [`.github/workflows/ci.yml`](.github/workflows/ci.yml). The checks — Go tests against a real PostgreSQL, frontend lint/test/build, `sqlc diff`, and Caddy validation — run in parallel with the image builds; only the deploy waits for all of them.
 
 The pieces:
 
@@ -223,6 +224,16 @@ Repository secrets: `VPS_HOST`, `VPS_USER`, `VPS_SSH_KEY`, and `VPS_HOST_KEY` �
 The deploy pushes `compose.vps.yaml`, pins both image tags to the commit in `.env`, pulls and restarts, syncs the Caddy fragment — validating the whole assembled config and reloading only if the fragment changed — then verifies the containers from inside the Docker network and every site on the box from the outside.
 
 `api` publishes `127.0.0.1:18080`. That port is required, not a leftover: LiveKit runs in the host network namespace, so its webhooks reach the API only through a published port. Nothing else is published — the shared Caddy reaches `api` and `web` by their `mova-api` and `mova-web` aliases on the external `proxy` network, and proxies LiveKit through `host.docker.internal:7880`. Keep the LiveKit DNS record in DNS-only mode so WebRTC traffic reaches the server directly.
+
+For direct DNS records, allow incoming TCP 80/443 from the internet in the cloud
+firewall as well as UFW, so browsers and the certificate authority can reach
+Caddy. Keep `livekit.hubindev.cc` in DNS-only mode. On this VPS, configure UFW:
+
+```bash
+sudo ufw allow 7881/tcp comment 'Mowa WebRTC TCP'
+sudo ufw allow 7882/udp comment 'Mowa WebRTC UDP'
+sudo ufw allow from 172.19.0.0/16 to any port 7880 proto tcp comment 'Mowa LiveKit from Docker proxy'
+```
 
 The shared `proxy` network uses the fixed `172.19.0.0/16` subnet. UFW permits
 TCP 7880 only from that subnet, so Caddy can reach LiveKit without exposing its

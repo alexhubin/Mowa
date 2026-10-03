@@ -3,7 +3,7 @@
 # A syntax error here blocks the reload for every project on the box, so the
 # deploy validates the whole assembled config before reloading.
 
-mova.hubindev.cc {
+mowa.hubindev.cc {
 	encode zstd gzip
 
 	@api path /api/*
