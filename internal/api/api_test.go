@@ -123,7 +123,7 @@ func TestAuthRoomAndLiveKitTokenFlow(t *testing.T) {
 	if err != nil {
 		t.Fatalf("verify LiveKit token: %v", err)
 	}
-	if verifier.Identity() != me.ID || grants.Video == nil || !grants.Video.RoomJoin || grants.Video.Room != room.ID || grants.Video.GetCanPublishData() {
+	if verifier.Identity() != me.ID || grants.Video == nil || !grants.Video.RoomJoin || grants.Video.Room != room.ID || grants.Video.GetCanPublishData() || !grants.Video.GetCanUpdateOwnMetadata() {
 		t.Fatalf("unexpected LiveKit grants: %+v", grants.Video)
 	}
 

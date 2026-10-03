@@ -13,6 +13,8 @@ import { navigate, route } from './navigation.svelte'
 const media = vi.hoisted(() => ({ rooms: [] as FakeRoom[] }))
 
 class FakeParticipant {
+  attributes: Record<string, string> = {}
+  setAttributes = vi.fn(async (attrs: Record<string, string>) => { Object.assign(this.attributes, attrs) })
   identity = 'me'
   name = 'Алекс'
   isSpeaking = false
@@ -46,15 +48,20 @@ class FakeParticipant {
     this.room.emit(RoomEvent.LocalTrackPublished)
     return publication
   })
-  setScreenShareEnabled = vi.fn(async (enabled: boolean) => {
-    this.isScreenShareEnabled = enabled
-    if (enabled)
-      this.publications.set(Track.Source.ScreenShare, {
-        isMuted: false,
-        track: { stop: vi.fn(), attach: vi.fn(), detach: vi.fn() },
-      })
-    else this.publications.delete(Track.Source.ScreenShare)
+  createScreenTracks = vi.fn(async () => [{
+    kind: Track.Kind.Video,
+    mediaStreamTrack: { readyState: 'live' },
+    stop: vi.fn(), attach: vi.fn(), detach: vi.fn(), on: vi.fn(), off: vi.fn(),
+  }])
+  publishTrack = vi.fn(async (track: Awaited<ReturnType<FakeParticipant['createScreenTracks']>>[number]) => {
+    this.isScreenShareEnabled = true
+    this.publications.set(Track.Source.ScreenShare, { isMuted: false, track })
     this.room.emit(RoomEvent.LocalTrackPublished)
+  })
+  unpublishTrack = vi.fn(async () => {
+    this.isScreenShareEnabled = false
+    this.publications.delete(Track.Source.ScreenShare)
+    this.room.emit(RoomEvent.LocalTrackUnpublished)
   })
 }
 
@@ -68,6 +75,10 @@ class FakeRoom {
   }
   on(event: string, listener: () => void) {
     this.handlers.set(event, [...(this.handlers.get(event) ?? []), listener])
+    return this
+  }
+  off(event: string, listener: () => void) {
+    this.handlers.set(event, (this.handlers.get(event) ?? []).filter(fn => fn !== listener))
     return this
   }
   emit(event: string) {
@@ -87,6 +98,8 @@ class FakeRoom {
 
 vi.mock('livekit-client', async (importOriginal) => ({
   ...(await importOriginal<typeof import('livekit-client')>()),
+  supportsAV1: () => true,
+  supportsVP9: () => true,
   Room: class {
     constructor() {
       return new FakeRoom()
@@ -120,6 +133,9 @@ const json = (body: unknown) =>
   })
 
 beforeEach(() => {
+  const caps = { getCapabilities: () => ({ codecs: [{ mimeType: 'video/H264', sdpFmtpLine: 'profile-level-id=42e01f;packetization-mode=1' }] }) }
+  vi.stubGlobal('RTCRtpSender', caps)
+  vi.stubGlobal('RTCRtpReceiver', caps)
   anonymous = false
   guestSession = null
   guestJoinError = false
@@ -228,10 +244,42 @@ describe('Svelte LiveKit lifecycle', () => {
     )!
     navigate({ to: '/' })
     await screen.findByRole('heading', { name: 'Friends' })
-    expect(track.stop).toHaveBeenCalledOnce()
+    expect(track.stop).toHaveBeenCalled()
     expect(track.detach).toHaveBeenCalledOnce()
     expect(room.disconnect).toHaveBeenCalledOnce()
     expect(source.close).toHaveBeenCalledOnce()
+  })
+
+  it('republishes one capture as compatible peers join, update capabilities and leave', async () => {
+    const caps = { getCapabilities: () => ({ codecs: [
+      { mimeType: 'video/AV1' }, { mimeType: 'video/VP9' },
+      { mimeType: 'video/H264', sdpFmtpLine: 'profile-level-id=42e01f;packetization-mode=1' },
+    ] }) }
+    vi.stubGlobal('RTCRtpSender', caps)
+    vi.stubGlobal('RTCRtpReceiver', caps)
+    const room = await join()
+    await fireEvent.click(screen.getByRole('button', { name: 'Share screen' }))
+    const published = (codec: string, maxBitrate: number) => waitFor(() =>
+      expect(room.localParticipant.publishTrack).toHaveBeenLastCalledWith(expect.anything(), expect.objectContaining({
+        videoCodec: codec, simulcast: false, backupCodec: false,
+        screenShareEncoding: { maxBitrate, maxFramerate: 60 },
+      })),
+    )
+    await published('av1', 8e6)
+    const remote = new FakeParticipant(room)
+    remote.identity = 'friend'
+    remote.attributes = { 'mowa.video.receive.v1': 'vp9,h264' }
+    room.remoteParticipants.set('friend', remote)
+    room.emit(RoomEvent.ParticipantConnected)
+    await published('vp9', 10e6)
+    remote.attributes['mowa.video.receive.v1'] = 'h264'
+    room.emit(RoomEvent.ParticipantAttributesChanged)
+    await published('h264', 14e6)
+    room.remoteParticipants.delete('friend')
+    room.emit(RoomEvent.ParticipantDisconnected)
+    await published('av1', 8e6)
+    expect(room.localParticipant.createScreenTracks).toHaveBeenCalledOnce()
+    expect(room.localParticipant.unpublishTrack).toHaveBeenCalledTimes(3)
   })
 
   it('blocks screen sharing while a remote participant shares and sends room messages', async () => {

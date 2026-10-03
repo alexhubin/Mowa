@@ -27,7 +27,6 @@
     ConnectionState,
     Room,
     RoomEvent,
-    ScreenSharePresets,
     Track,
   } from 'livekit-client'
   import {
@@ -50,6 +49,8 @@
   import ParticipantRow from './ParticipantRow.svelte'
   import ChatMessage from './ChatMessage.svelte'
   import ScreenTrack from './ScreenTrack.svelte'
+  import { ScreenPublisher } from '../screenPublisher'
+  let screenPublisher: ScreenPublisher | null = null
   let { inviteCode }: { inviteCode: string } = $props()
   const queryClient = useQueryClient()
   let audioHost: HTMLDivElement | null = $state.raw(null)
@@ -213,12 +214,17 @@
         }
       })
       nextCall.on(RoomEvent.TrackUnsubscribed, (track) => {
-        track.detach().forEach((element) => element.remove())
+        // Svelte owns video elements; only remove the audio elements we created.
+        if (track.kind === Track.Kind.Audio) track.detach().forEach((element) => element.remove())
         refresh()
       })
 
       try {
         await nextCall.connect(credentials.server_url, credentials.token)
+        if (activeCall === nextCall) {
+          screenPublisher = new ScreenPublisher(nextCall, message => { controlError = message })
+          await screenPublisher.announce()
+        }
       } catch (error) {
         if (activeCall === nextCall) activeCall = null
         stopLocalMedia(nextCall)
@@ -362,26 +368,9 @@
         return
       }
       const quality = settingsQuery.data?.video_quality ?? 'high'
-      const preset =
-        quality === 'low'
-          ? ScreenSharePresets.h720fps30
-          : ScreenSharePresets.h1080fps30
-      await call.localParticipant.setScreenShareEnabled(
-        enable,
-        enable
-          ? { resolution: preset.resolution, contentHint: 'detail' }
-          : undefined,
-        enable
-          ? {
-              screenShareEncoding: preset.encoding,
-              simulcast: true,
-              videoCodec: 'vp9',
-              backupCodec: true,
-              scalabilityMode: 'L3T3_KEY',
-              degradationPreference: 'maintain-resolution',
-            }
-          : undefined,
-      )
+      if (!screenPublisher) throw new Error('Video negotiation is not ready')
+      if (enable) await screenPublisher.start(quality !== 'low')
+      else await screenPublisher.stop()
       revision += 1
     } catch (error) {
       controlError =
@@ -454,6 +443,10 @@
     }
   }
   function stopLocalMedia(room: Room) {
+    if (room === call || room === activeCall || !activeCall) {
+      screenPublisher?.dispose()
+      screenPublisher = null
+    }
     room.localParticipant
       .getTrackPublications()
       .forEach((publication) => publication.track?.stop())

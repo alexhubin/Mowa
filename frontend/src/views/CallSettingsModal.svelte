@@ -204,8 +204,8 @@
               event.currentTarget.value as AccountSettings['video_quality'],
             )}
           disabled={quality.isPending}
-          ><option value="low">720p · 30 fps</option><option value="high"
-            >1080p · 30 fps</option
+          ><option value="low">720p · 60 fps</option><option value="high"
+            >1080p · 60 fps</option
           ></select
         ></label
       >
