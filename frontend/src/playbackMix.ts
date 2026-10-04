@@ -1,3 +1,4 @@
+import { AudioEnvelope } from './audioEnvelope'
 import { Track, type RemoteAudioTrack, type Room } from 'livekit-client'
 export type PlaybackMix = { voice: number; stream: number; ducking: boolean; reduction: number }
 const key = 'mowa.playback-mix.v1'
@@ -26,6 +27,25 @@ export function applyRoomMix(room: Room) {
     for (const publication of participant.getTrackPublications()) {
       const track = publication.audioTrack
       if (track && 'setVolume' in track) applyTrackVolume(track, publication.source, mix, participant.isSpeaking)
+    }
+  }
+}
+
+// One envelope per received stream: another participant speaking cannot duck it.
+const envelopes = new WeakMap<RemoteAudioTrack, AudioEnvelope>()
+export function updateSmoothMix(room: Room, now = performance.now()) {
+  const mix = loadMix()
+  for (const participant of room.remoteParticipants.values()) {
+    for (const publication of participant.getTrackPublications()) {
+      const track = publication.audioTrack
+      if (!track || !('setVolume' in track)) continue
+      if (publication.source !== Track.Source.ScreenShareAudio) {
+        applyTrackVolume(track, publication.source, mix)
+        continue
+      }
+      let envelope = envelopes.get(track)
+      if (!envelope) { envelope = new AudioEnvelope(); envelopes.set(track, envelope) }
+      track.setVolume(mix.stream / 100 * envelope.update(mix.ducking, participant.isSpeaking, mix.reduction, now))
     }
   }
 }

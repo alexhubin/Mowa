@@ -1,6 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import { Track, type RemoteAudioTrack, type Room } from 'livekit-client'
-import { applyRoomMix, applyTrackVolume, loadMix, saveMix } from './playbackMix'
+import { applyRoomMix, applyTrackVolume, loadMix, saveMix, updateSmoothMix } from './playbackMix'
 beforeEach(() => localStorage.clear())
 it('changes only listener playback and keeps voice independent from stream audio', () => {
   saveMix({ voice: 100, stream: 20, ducking: false, reduction: 70 })
@@ -48,4 +48,24 @@ it('ducks only the stream belonging to the person speaking', () => {
   applyRoomMix(room)
   expect(speakingStream.setVolume).toHaveBeenLastCalledWith(0)
   expect(silentStream.setVolume).toHaveBeenLastCalledWith(1)
+})
+
+it('applies the smooth envelope to the speaking author without changing voice or other streams', () => {
+  saveMix({ voice: 150, stream: 200, ducking: true, reduction: 70 })
+  const voice = { setVolume: vi.fn() } as unknown as RemoteAudioTrack
+  const stream = { setVolume: vi.fn() } as unknown as RemoteAudioTrack
+  const other = { setVolume: vi.fn() } as unknown as RemoteAudioTrack
+  const author = { isSpeaking: true, getTrackPublications: () => [{ source: Track.Source.Microphone, audioTrack: voice }, { source: Track.Source.ScreenShareAudio, audioTrack: stream }] }
+  const room = { remoteParticipants: new Map([['a', author], ['b', { isSpeaking: false, getTrackPublications: () => [{ source: Track.Source.ScreenShareAudio, audioTrack: other }] }]]) } as unknown as Room
+  updateSmoothMix(room, 0)
+  updateSmoothMix(room, 240)
+  expect(voice.setVolume).toHaveBeenLastCalledWith(1.5)
+  expect(other.setVolume).toHaveBeenLastCalledWith(2)
+  expect(vi.mocked(stream.setVolume).mock.lastCall?.[0]).toBeGreaterThan(0.6)
+  expect(vi.mocked(stream.setVolume).mock.lastCall?.[0]).toBeLessThan(0.7)
+  author.isSpeaking = false
+  updateSmoothMix(room, 600)
+  expect(vi.mocked(stream.setVolume).mock.lastCall?.[0]).toBeCloseTo(0.6, 2)
+  updateSmoothMix(room, 4000)
+  expect(stream.setVolume).toHaveBeenLastCalledWith(2)
 })

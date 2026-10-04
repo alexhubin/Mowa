@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount } from 'svelte'
-  import { applyRoomMix, applyTrackVolume, mixEvent } from '../playbackMix'
-  import type { RemoteAudioTrack } from 'livekit-client'
+  import { updateSmoothMix, mixEvent } from '../playbackMix'
 
   import {
     createQuery,
@@ -176,10 +175,11 @@
     }
   })
   onMount(() => {
-    const update = () => { if (activeCall) applyRoomMix(activeCall) }
+    const update = () => { if (activeCall) updateSmoothMix(activeCall) }
+    const mixTimer = window.setInterval(update, 40)
     window.addEventListener(mixEvent, update)
     window.addEventListener('storage', update)
-    return () => { window.removeEventListener(mixEvent, update); window.removeEventListener('storage', update) }
+    return () => { window.clearInterval(mixTimer); window.removeEventListener(mixEvent, update); window.removeEventListener('storage', update) }
   })
   const join = createMutation(() => ({
     mutationFn: async () => {
@@ -197,7 +197,7 @@
       })
       activeCall = nextCall
 
-      const refresh = () => { revision += 1; applyRoomMix(nextCall) }
+      const refresh = () => { revision += 1; updateSmoothMix(nextCall) }
       const events = [
         RoomEvent.ParticipantConnected,
         RoomEvent.ParticipantDisconnected,
@@ -212,12 +212,11 @@
       ] as const
       events.forEach((event) => nextCall.on(event, refresh))
 
-      nextCall.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
+      nextCall.on(RoomEvent.TrackSubscribed, (track) => {
         refresh()
         if (track.kind === Track.Kind.Audio && audioHost) {
-          applyTrackVolume(track as RemoteAudioTrack, publication.source, undefined, participant.isSpeaking)
           const element = track.attach()
-          applyTrackVolume(track as RemoteAudioTrack, publication.source, undefined, participant.isSpeaking)
+          updateSmoothMix(nextCall)
           element.dataset.movaAudio = track.sid ?? ''
           // LiveKit owns the attached audio elements in this dedicated host.
           // eslint-disable-next-line svelte/no-dom-manipulating
