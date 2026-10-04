@@ -5,6 +5,7 @@ import (
 	"errors"
 	"log/slog"
 	"net/http"
+	"time"
 
 	"github.com/alexhubin/Mowa/internal/auth"
 	"github.com/alexhubin/Mowa/internal/database/dbgen"
@@ -164,4 +165,56 @@ func (s *Server) updateSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, settingsResponse{VideoQuality: settings.VideoQuality})
+}
+
+// Account-owned records (including browser/desktop sessions) use ON DELETE CASCADE.
+func (s *Server) deleteAccount(w http.ResponseWriter, r *http.Request) {
+	var input struct {
+		Username string `json:"username"`
+	}
+	if !decodeJSON(w, r, &input) {
+		return
+	}
+	user := currentUser(r)
+	if input.Username != user.Username {
+		writeError(w, 422, "Enter your username to confirm deletion")
+		return
+	}
+	tx, err := s.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		writeError(w, 500, "Could not delete account")
+		return
+	}
+	defer tx.Rollback()
+	// These short-lived proofs are not foreign-keyed to a user. Invalidate them too.
+	_, err = tx.ExecContext(r.Context(), `DELETE FROM auth_flows WHERE lower(email)=lower($1) OR subject IN (SELECT subject FROM google_identities WHERE user_id=$2)`, user.Email, user.ID)
+	if err == nil {
+		_, err = tx.ExecContext(r.Context(), "DELETE FROM rooms WHERE id IN (SELECT room_id FROM direct_calls WHERE caller_id=$1 OR callee_id=$1)", user.ID)
+	}
+	if err == nil {
+		var result sql.Result
+		result, err = tx.ExecContext(r.Context(), "DELETE FROM users WHERE id=$1 AND username=$2", user.ID, input.Username)
+		if err == nil {
+			n, _ := result.RowsAffected()
+			if n != 1 {
+				writeError(w, 409, "Account changed. Reload settings and try again.")
+				return
+			}
+		}
+	}
+	if err == nil {
+		err = tx.Commit()
+	}
+	if err != nil {
+		slog.Error("delete account", "error", err)
+		writeError(w, 500, "Could not delete account")
+		return
+	}
+	http.SetCookie(w, s.cookie("", s.now().Add(-time.Hour)))
+	c := s.cookie("", s.now().Add(-time.Hour))
+	c.Name = flowCookie
+	http.SetCookie(w, c)
+	s.callEvents.notify(user.ID)
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(http.StatusNoContent)
 }

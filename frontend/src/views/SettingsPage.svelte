@@ -1,4 +1,5 @@
 <script lang="ts">
+  import DeleteAccount from './DeleteAccount.svelte'
   import PlaybackMix from './PlaybackMix.svelte'
   import { onMount } from 'svelte'
 
@@ -176,6 +177,7 @@
           />
         {/if}
       </section>
+      <DeleteAccount {user} />
     </div>
   </main>
 {/if}

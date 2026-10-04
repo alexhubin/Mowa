@@ -262,6 +262,10 @@ To roll back, point both image tags at an earlier commit and restart:
 ssh admin@<vps> 'cd /opt/mova && sed -i "s|^API_IMAGE=.*|API_IMAGE=ghcr.io/alexhubin/mowa-api:<sha>|;s|^WEB_IMAGE=.*|WEB_IMAGE=ghcr.io/alexhubin/mowa-web:<sha>|" .env && docker compose -f compose.vps.yaml up -d'
 ```
 
+## Account deletion
+
+Settings → Delete account requires typing the current username. `DELETE /api/account` deletes only the authenticated account in a transaction. Foreign-key cascades remove sessions on all devices, settings, Google linkage, passkeys, friendships, messages and owned rooms. Related direct-call rooms and pending email/identity proofs are also removed. This is irreversible and frees a registration slot; other users' accounts are preserved.
+
 ## Security and MVP limitations
 
 - Passwords are hashed with Argon2id and a unique salt.

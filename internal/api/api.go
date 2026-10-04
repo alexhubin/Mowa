@@ -130,6 +130,7 @@ func (s *Server) Handler() http.Handler {
 		r.Group(func(r chi.Router) {
 			r.Use(s.requireUser)
 			r.Use(s.requirePasswordChanged)
+			r.Delete("/api/account", s.deleteAccount)
 			r.Patch("/api/account/profile", s.updateProfile)
 			r.Put("/api/account/password", s.updatePassword)
 			r.Get("/api/account/passkeys", s.listPasskeys)

@@ -64,6 +64,7 @@ beforeEach(() => {
       return json({user:session, next: new URLSearchParams(location.search).get('next') ?? '/'})
     }
     if (input === '/api/auth/desktop/approve') return new Response(null, {status:204})
+    if (input === '/api/account' && method === 'DELETE') { session = null; return new Response(null, {status:204}) }
     if (input === '/api/auth/logout') {
       session = null
       return new Response(null, { status: 204 })
@@ -312,5 +313,40 @@ describe('Registration and browser desktop login', () => {
     await fireEvent.submit(code.closest('form')!)
     await screen.findByRole('button',{name:'Sign in to app'})
     expect(requestsTo('/api/auth/desktop/approve')).toHaveLength(0)
+  })
+})
+
+
+describe('Account deletion', () => {
+  it('requires the exact username, allows cancellation and clears the session', async () => {
+    navigate({to:'/settings'})
+    render(App)
+    const start = await screen.findByRole('button',{name:'Delete account'})
+    await fireEvent.click(start)
+    expect(requestsTo('/api/account')).toHaveLength(0)
+    expect(screen.getByRole('button',{name:'Permanently delete account'})).toBeDisabled()
+    await fireEvent.input(screen.getByLabelText('Confirm your username'),{target:{value:'someone_else'}})
+    expect(screen.getByRole('button',{name:'Permanently delete account'})).toBeDisabled()
+    await fireEvent.click(screen.getByRole('button',{name:'Cancel'}))
+    expect(requestsTo('/api/account')).toHaveLength(0)
+    await fireEvent.click(screen.getByRole('button',{name:'Delete account'}))
+    await fireEvent.input(screen.getByLabelText('Confirm your username'),{target:{value:user.username}})
+    await fireEvent.click(screen.getByRole('button',{name:'Permanently delete account'}))
+    await screen.findByRole('heading',{name:'Sign in'})
+    expect(requestsTo('/api/account')).toHaveLength(1)
+    expect(requestsTo('/api/account')[0][1].method).toBe('DELETE')
+    expect(session).toBeNull()
+  })
+  it('keeps the confirmation and account when deletion fails', async () => {
+    const original = fetchMock.getMockImplementation() as (input:string, init?:RequestInit) => Promise<Response>
+    fetchMock.mockImplementation(async (input:string, init?:RequestInit) => input === '/api/account' ? new Response(JSON.stringify({error:'Could not delete account'}),{status:500}) : original(input,init))
+    navigate({to:'/settings'})
+    render(App)
+    await fireEvent.click(await screen.findByRole('button',{name:'Delete account'}))
+    await fireEvent.input(screen.getByLabelText('Confirm your username'),{target:{value:user.username}})
+    await fireEvent.click(screen.getByRole('button',{name:'Permanently delete account'}))
+    await screen.findByRole('alert')
+    expect(session).not.toBeNull()
+    expect(route.pathname).toBe('/settings')
   })
 })
