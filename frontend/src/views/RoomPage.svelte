@@ -191,12 +191,13 @@
       if (disposed) return
       const nextCall = new Room({
         adaptiveStream: true,
+        webAudioMix: true,
         dynacast: true,
         disconnectOnPageLeave: true,
       })
       activeCall = nextCall
 
-      const refresh = () => (revision += 1)
+      const refresh = () => { revision += 1; applyRoomMix(nextCall) }
       const events = [
         RoomEvent.ParticipantConnected,
         RoomEvent.ParticipantDisconnected,
@@ -211,11 +212,12 @@
       ] as const
       events.forEach((event) => nextCall.on(event, refresh))
 
-      nextCall.on(RoomEvent.TrackSubscribed, (track, publication) => {
+      nextCall.on(RoomEvent.TrackSubscribed, (track, publication, participant) => {
         refresh()
         if (track.kind === Track.Kind.Audio && audioHost) {
-          applyTrackVolume(track as RemoteAudioTrack, publication.source)
+          applyTrackVolume(track as RemoteAudioTrack, publication.source, undefined, participant.isSpeaking)
           const element = track.attach()
+          applyTrackVolume(track as RemoteAudioTrack, publication.source, undefined, participant.isSpeaking)
           element.dataset.movaAudio = track.sid ?? ''
           // LiveKit owns the attached audio elements in this dedicated host.
           // eslint-disable-next-line svelte/no-dom-manipulating
