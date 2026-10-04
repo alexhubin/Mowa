@@ -37,6 +37,8 @@ const (
 var usernamePattern = regexp.MustCompile(`^[a-z0-9_]{3,32}$`)
 
 type Server struct {
+	sendCode      func(context.Context, string, string) error
+	googleClaims  func(context.Context, string, string, string) (string, string, error)
 	db            *sql.DB
 	queries       *dbgen.Queries
 	cfg           config.Config
@@ -109,6 +111,13 @@ func (s *Server) Handler() http.Handler {
 		r.Route("/api/auth", func(r chi.Router) {
 			r.Post("/login", s.login)
 			r.Post("/register", s.register)
+			r.Get("/methods", s.authMethods)
+			r.Post("/email/start", s.startEmailLogin)
+			r.Post("/email/verify", s.verifyEmailLogin)
+			r.Get("/google/start", s.startGoogleLogin)
+			r.Get("/google/callback", s.finishGoogleLogin)
+			r.Post("/identity", s.pendingIdentity)
+			r.Post("/complete", s.completeIdentity)
 			r.Post("/desktop/start", s.startDesktopLogin)
 			r.Post("/desktop/exchange", s.exchangeDesktopLogin)
 			r.With(s.requireUser, s.requirePasswordChanged).Post("/desktop/approve", s.approveDesktopLogin)

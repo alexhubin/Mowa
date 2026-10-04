@@ -17,7 +17,6 @@
   import { initials } from '../utils'
   import PasskeySettings from './PasskeySettings.svelte'
   import ProfileForm from './ProfileForm.svelte'
-  import PasswordForm from './PasswordForm.svelte'
   import QualityForm from './QualityForm.svelte'
   import DeviceSelect from './DeviceSelect.svelte'
   const queryClient = useQueryClient()
@@ -90,8 +89,7 @@
           {user}
           onSaved={(next) => queryClient.setQueryData(['me'], next)}
         />
-        <div class="settings-divider"></div>
-        <PasswordForm />
+
       </section>
 
       <PasskeySettings />

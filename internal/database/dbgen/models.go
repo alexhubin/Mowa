@@ -10,6 +10,25 @@ import (
 	"time"
 )
 
+type AuthFlow struct {
+	TokenHash string    `json:"token_hash"`
+	Kind      string    `json:"kind"`
+	Email     string    `json:"email"`
+	Subject   string    `json:"subject"`
+	CodeHash  string    `json:"code_hash"`
+	Attempts  int32     `json:"attempts"`
+	NextPath  string    `json:"next_path"`
+	Nonce     string    `json:"nonce"`
+	Verifier  string    `json:"verifier"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+type AuthRateLimit struct {
+	KeyHash   string    `json:"key_hash"`
+	Count     int32     `json:"count"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
 type DesktopDiagnostic struct {
 	UserID     string          `json:"user_id"`
 	EventID    string          `json:"event_id"`
@@ -55,6 +74,11 @@ type Friendship struct {
 	UserID    string    `json:"user_id"`
 	FriendID  string    `json:"friend_id"`
 	CreatedAt time.Time `json:"created_at"`
+}
+
+type GoogleIdentity struct {
+	Subject string `json:"subject"`
+	UserID  string `json:"user_id"`
 }
 
 type OpenCallParticipant struct {

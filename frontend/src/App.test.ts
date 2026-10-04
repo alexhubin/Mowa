@@ -57,9 +57,11 @@ beforeEach(() => {
       })
     if (input === '/api/auth/me')
       return session ? json(session) : json({ error: 'Unauthorized' }, 401)
-    if (input === '/api/auth/login' || input === '/api/auth/register') {
+    if (input === '/api/auth/methods') return json({email:true, google:true})
+    if (input === '/api/auth/email/start') return json({retry_after:60})
+    if (input === '/api/auth/email/verify' || input === '/api/auth/complete') {
       session = { ...user }
-      return json(session)
+      return json({user:session, next: new URLSearchParams(location.search).get('next') ?? '/'})
     }
     if (input === '/api/auth/desktop/approve') return new Response(null, {status:204})
     if (input === '/api/auth/logout') {
@@ -139,13 +141,13 @@ describe('Svelte application with TanStack Query', () => {
     const email = await screen.findByRole('textbox', { name: 'Email' })
     expect(route.pathname).toBe('/login')
     await fireEvent.input(email, { target: { value: user.email } })
-    await fireEvent.input(screen.getByLabelText('Password', { exact: true }), {
-      target: { value: 'password123' },
-    })
     await fireEvent.submit(email.closest('form')!)
+    const code = await screen.findByLabelText('Verification code')
+    await fireEvent.input(code, {target:{value:'123456'}})
+    await fireEvent.submit(code.closest('form')!)
     await screen.findByRole('heading', { name: 'Friends' })
     expect(route.pathname).toBe('/')
-    expect(requestsTo('/api/auth/login')).toHaveLength(1)
+    expect(requestsTo('/api/auth/email/verify')).toHaveLength(1)
     await fireEvent.click(screen.getByRole('button', { name: 'Sign out' }))
     await screen.findByRole('textbox', { name: 'Email' })
     await waitFor(() =>
@@ -260,21 +262,30 @@ describe('Svelte application with TanStack Query', () => {
 })
 
 describe('Registration and browser desktop login', () => {
-  it('registers an account without displaying quotas', async () => {
+  it('verifies email before choosing a username without displaying quotas', async () => {
     session = null
+    const original = fetchMock.getMockImplementation() as (input: string, init?: RequestInit) => Promise<Response>
+    fetchMock.mockImplementation(async (input: string, init?: RequestInit) => {
+      if (input === '/api/auth/email/verify') return new Response(JSON.stringify({needs_username:true,email:user.email}), {status:200})
+      return original(input,init)
+    })
     navigate({to:'/register'})
     render(App)
-    await screen.findByRole('heading',{name:'Sign up'})
-    await fireEvent.input(screen.getByLabelText('Username'),{target:{value:'alex'}})
-    await fireEvent.input(screen.getByLabelText('Email'),{target:{value:'alex@example.com'}})
-    await fireEvent.input(screen.getByLabelText('Password'),{target:{value:'secure-password'}})
-    await fireEvent.input(screen.getByLabelText('Confirm password'),{target:{value:'different-password'}})
-    expect(screen.getByRole('button',{name:'Create account'})).toBeDisabled()
-    await fireEvent.input(screen.getByLabelText('Confirm password'),{target:{value:'secure-password'}})
-    expect(screen.queryByText(/лимит|10 аккаунтов/i)).not.toBeInTheDocument()
+    await screen.findByRole('heading',{name:'Sign in'})
+    expect(screen.queryByLabelText('Username')).not.toBeInTheDocument()
+    await fireEvent.input(screen.getByLabelText('Email'),{target:{value:user.email}})
     await fireEvent.submit(screen.getByLabelText('Email').closest('form')!)
+    const code = await screen.findByLabelText('Verification code')
+    expect(screen.getByRole('button',{name:/Resend code in/})).toBeDisabled()
+    await fireEvent.input(code,{target:{value:'123456'}})
+    await fireEvent.submit(code.closest('form')!)
+    const username = await screen.findByLabelText('Username')
+    await fireEvent.input(username,{target:{value:'alex'}})
+    expect(screen.queryByText(/quota|account limit/i)).not.toBeInTheDocument()
+    await fireEvent.submit(username.closest('form')!)
     await screen.findByRole('heading',{name:'Friends'})
-    expect(requestsTo('/api/auth/register')).toHaveLength(1)
+    expect(requestsTo('/api/auth/complete')).toHaveLength(1)
+    expect(requestsTo('/api/auth/register')).toHaveLength(0)
   })
   it('requires an explicit approval before signing into desktop', async () => {
     const id='a'.repeat(43)
@@ -293,8 +304,13 @@ describe('Registration and browser desktop login', () => {
     render(App)
     await screen.findByRole('heading',{name:'Sign in'})
     expect(new URLSearchParams(location.search).get('next')).toBe(next)
-    await fireEvent.click(screen.getByRole('link',{name:'Create account'}))
-    await screen.findByRole('heading',{name:'Sign up'})
-    expect(new URLSearchParams(location.search).get('next')).toBe(next)
+    await fireEvent.input(screen.getByLabelText('Email'),{target:{value:user.email}})
+    await fireEvent.submit(screen.getByLabelText('Email').closest('form')!)
+    const code = await screen.findByLabelText('Verification code')
+    expect(JSON.parse(requestsTo('/api/auth/email/start')[0][1].body).next).toBe(next)
+    await fireEvent.input(code,{target:{value:'123456'}})
+    await fireEvent.submit(code.closest('form')!)
+    await screen.findByRole('button',{name:'Sign in to app'})
+    expect(requestsTo('/api/auth/desktop/approve')).toHaveLength(0)
   })
 })

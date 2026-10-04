@@ -4,10 +4,8 @@ Mowa is a minimalist web application for one-to-one and group voice calls with s
 
 ## MVP features
 
-- Persistent accounts with unique usernames, profiles, and password changes
-- Sign-in, sign-out and limited public registration with secure 30-day sessions
-- Passwordless sign-in with passkeys (Touch ID, Face ID, Windows Hello, or a hardware security key)
-- Mandatory temporary password change on first sign-in
+- Persistent accounts with unique usernames and profiles
+- Email OTP and Google sign-in with secure 30-day sessions and a shared two-account registration limit
 - User search, friend requests, and a friends list
 - Persistent direct conversations with offline delivery; the same conversation is available during a one-to-one call
 - Direct calls to friends and incoming call notifications
@@ -93,18 +91,17 @@ for access from other devices.
 
 ### Create a user
 
-Accounts are created by an administrator. Pass the temporary password through an environment variable so it does not appear in process arguments:
+Sign in using Google or a six-digit email code. New users choose a username after verifying their identity. Both methods share a hardcoded two-account limit; existing users can still sign in when registration is closed. A Google identity with the same verified email links to the existing account.
 
-```bash
-docker compose run --rm \
-  -e MOVA_TEMP_PASSWORD='replace-with-temporary-password' \
-  --entrypoint mova-create-user api \
-  -email user@example.com \
-  -username user_name \
-  -name 'User Name'
-```
+Set server-only `RESEND_KEY`, `RESEND_FROM`, `GOOGLE_CLIENT_ID`, and `GOOGLE_CLIENT_SECRET` in `.env`. The sender must use a verified Resend domain (for example `Mowa <noreply@hubindev.cc>`). No secrets are bundled into the web or desktop client.
 
-Until the user replaces the temporary password, the only available actions are signing out and setting a new password. Friends, settings, rooms, and LiveKit tokens remain blocked by the API.
+Create a Google OAuth **Web application** client with exact redirect URIs:
+- `http://localhost/api/auth/google/callback`
+- `https://mowa.hubindev.cc/api/auth/google/callback`
+
+The server derives the callback from `APP_ORIGIN`. Google accounts using a non-Gmail address outside a verified Workspace domain should use email OTP to prove current ownership. Codes expire after ten minutes, permit five attempts, and can be requested once per minute and six times per hour per email, with a global hourly cap. Authentication proofs are single-use and browser-bound. Google uses state, nonce, PKCE and verified OIDC signatures, issuer and audience. Desktop continues to request its own independent session through the browser approval page.
+
+Legacy password endpoints remain for administrator-provisioned accounts, but public password registration is disabled. New accounts have no usable password hash. Resetting development users is an explicit maintenance action, never an automatic migration.
 
 ### Invite a guest
 
@@ -270,7 +267,7 @@ ssh admin@<vps> 'cd /opt/mova && sed -i "s|^API_IMAGE=.*|API_IMAGE=ghcr.io/alexh
 - Passwords are hashed with Argon2id and a unique salt.
 - Passkeys use discoverable WebAuthn credentials with mandatory user verification. The private key remains on the device; the API stores the public credential record and its updatable signature counter.
 - WebAuthn challenges expire after 5 minutes, can be used only once, and are bound to a random `HttpOnly`, `SameSite=Strict`, `Secure` cookie in production.
-- Public registration creates full accounts and starts a session. The backend-only constant `registrationAccountLimit` in `internal/api/registration.go` is 10, counting all existing users. Registration serializes the count and insert in PostgreSQL; lowering the constant blocks new registrations without removing accounts. No quota is exposed in the interface.
+- Public registration creates full accounts and starts a session. The backend-only constant `registrationAccountLimit` in `internal/api/registration.go` is 2, counting all existing users. Registration serializes the count and insert in PostgreSQL; lowering the constant blocks new registrations without removing accounts. No quota is exposed in the interface.
 - Rooms require full accounts. Legacy guest cookies no longer grant access.
 - Mowa Desktop opens `/desktop-login` in the system browser. The signed-in user explicitly approves; a five-minute, single-use request bound to the app's random verifier creates a separate desktop session. Browser passwords and session tokens are never placed in URLs.
 - Sessions use random opaque tokens; only their SHA-256 hashes are stored in PostgreSQL.

@@ -9,28 +9,36 @@ import (
 )
 
 type Config struct {
-	HTTPAddr         string
-	DatabaseURL      string
-	AppOrigin        string
-	CookieSecure     bool
-	LiveKitURL       string
-	LiveKitAPIKey    string
-	LiveKitAPISecret string
-	LiveKitTokenTTL  time.Duration
-	WebAuthnRPID     string
-	WebAuthnRPName   string
+	ResendKey          string
+	ResendFrom         string
+	GoogleClientID     string
+	GoogleClientSecret string
+	HTTPAddr           string
+	DatabaseURL        string
+	AppOrigin          string
+	CookieSecure       bool
+	LiveKitURL         string
+	LiveKitAPIKey      string
+	LiveKitAPISecret   string
+	LiveKitTokenTTL    time.Duration
+	WebAuthnRPID       string
+	WebAuthnRPName     string
 }
 
 func Load() (Config, error) {
 	cfg := Config{
-		HTTPAddr:         env("HTTP_ADDR", ":8080"),
-		DatabaseURL:      env("DATABASE_URL", "postgres://mova:mova-development-password@localhost:5432/mova?sslmode=disable"),
-		AppOrigin:        env("APP_ORIGIN", "http://localhost"),
-		LiveKitURL:       env("LIVEKIT_URL", "ws://localhost:7880"),
-		LiveKitAPIKey:    env("LIVEKIT_API_KEY", "devkey"),
-		LiveKitAPISecret: env("LIVEKIT_API_SECRET", "secretsecretsecretsecretsecretsecret"),
-		LiveKitTokenTTL:  10 * time.Minute,
-		WebAuthnRPName:   env("WEBAUTHN_RP_NAME", "Mowa"),
+		ResendKey:          env("RESEND_KEY", ""),
+		ResendFrom:         env("RESEND_FROM", "Mowa <noreply@hubindev.cc>"),
+		GoogleClientID:     env("GOOGLE_CLIENT_ID", ""),
+		GoogleClientSecret: env("GOOGLE_CLIENT_SECRET", ""),
+		HTTPAddr:           env("HTTP_ADDR", ":8080"),
+		DatabaseURL:        env("DATABASE_URL", "postgres://mova:mova-development-password@localhost:5432/mova?sslmode=disable"),
+		AppOrigin:          env("APP_ORIGIN", "http://localhost"),
+		LiveKitURL:         env("LIVEKIT_URL", "ws://localhost:7880"),
+		LiveKitAPIKey:      env("LIVEKIT_API_KEY", "devkey"),
+		LiveKitAPISecret:   env("LIVEKIT_API_SECRET", "secretsecretsecretsecretsecretsecret"),
+		LiveKitTokenTTL:    10 * time.Minute,
+		WebAuthnRPName:     env("WEBAUTHN_RP_NAME", "Mowa"),
 	}
 	appURL, err := url.Parse(cfg.AppOrigin)
 	if err != nil || appURL.Hostname() == "" {

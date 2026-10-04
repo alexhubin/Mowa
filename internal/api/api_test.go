@@ -193,8 +193,8 @@ func TestProtectedEndpointsAndOrigin(t *testing.T) {
 	server, client, _ := newTestServer(t)
 
 	response := doJSON(t, client, http.MethodPost, server.URL+"/api/auth/register", map[string]string{})
-	if response.StatusCode != http.StatusUnprocessableEntity {
-		t.Fatalf("invalid register status = %d, want 422", response.StatusCode)
+	if response.StatusCode != http.StatusGone {
+		t.Fatalf("invalid register status = %d, want 410", response.StatusCode)
 	}
 	response.Body.Close()
 
@@ -405,6 +405,9 @@ func TestPasskeyCeremonyAndManagementEndpoints(t *testing.T) {
 }
 
 func newTestServer(t *testing.T) (*httptest.Server, *http.Client, *sql.DB) {
+	return newConfiguredTestServer(t, nil)
+}
+func newConfiguredTestServer(t *testing.T, configure func(*Server)) (*httptest.Server, *http.Client, *sql.DB) {
 	t.Helper()
 	dsn := os.Getenv("TEST_DATABASE_URL")
 	if dsn == "" {
@@ -415,7 +418,7 @@ func newTestServer(t *testing.T) (*httptest.Server, *http.Client, *sql.DB) {
 		t.Fatalf("open database: %v", err)
 	}
 	t.Cleanup(func() { db.Close() })
-	if _, err := db.ExecContext(context.Background(), "TRUNCATE open_call_participants, direct_messages, room_messages, direct_calls, friendships, friend_requests, room_members, rooms, sessions, user_settings, users CASCADE"); err != nil {
+	if _, err := db.ExecContext(context.Background(), "TRUNCATE auth_flows, auth_rate_limits, open_call_participants, direct_messages, room_messages, direct_calls, friendships, friend_requests, room_members, rooms, sessions, user_settings, users CASCADE"); err != nil {
 		t.Fatalf("reset test database: %v", err)
 	}
 
@@ -429,6 +432,9 @@ func newTestServer(t *testing.T) (*httptest.Server, *http.Client, *sql.DB) {
 	apiServer, err := New(db, cfg)
 	if err != nil {
 		t.Fatalf("create API server: %v", err)
+	}
+	if configure != nil {
+		configure(apiServer)
 	}
 	server := httptest.NewServer(apiServer.Handler())
 	t.Cleanup(server.Close)

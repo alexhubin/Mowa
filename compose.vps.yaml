@@ -47,6 +47,10 @@ services:
       LIVEKIT_API_KEY: "${LIVEKIT_API_KEY:?set LIVEKIT_API_KEY in .env}"
       LIVEKIT_API_SECRET: "${LIVEKIT_API_SECRET:?set LIVEKIT_API_SECRET in .env}"
       LIVEKIT_TOKEN_TTL: "10m"
+      RESEND_KEY: "${RESEND_KEY:-}"
+      RESEND_FROM: "${RESEND_FROM:-Mowa <noreply@hubindev.cc>}"
+      GOOGLE_CLIENT_ID: "${GOOGLE_CLIENT_ID:-}"
+      GOOGLE_CLIENT_SECRET: "${GOOGLE_CLIENT_SECRET:-}"
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/api/health"]
       interval: 10s
