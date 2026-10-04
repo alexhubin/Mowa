@@ -1,10 +1,11 @@
-import { Room, RoomEvent, Track, TrackEvent, type LocalVideoTrack } from 'livekit-client'
+import { Room, RoomEvent, Track, TrackEvent, type LocalVideoTrack, type LocalAudioTrack } from 'livekit-client'
 import { RECEIVE_CODECS, bitrate, browserCodecs, chooseCodec, parseCodecs, type ScreenCodec } from './videoPolicy'
 
 // Exactly one encoding. Republish the existing capture when the room's common codec changes.
 export class ScreenPublisher {
   private caps = browserCodecs()
   private track?: LocalVideoTrack
+  private audio?: LocalAudioTrack
   private codec?: ScreenCodec
   private high = true
   private closed = false
@@ -39,15 +40,27 @@ export class ScreenPublisher {
     const generation = ++this.generation
     // Call the picker directly from the user gesture, before queuing network operations.
     const tracks = await this.room.localParticipant.createScreenTracks({
-      audio: false, contentHint: 'detail',
+      audio: true, systemAudio: 'exclude', selfBrowserSurface: 'exclude', contentHint: 'detail',
       resolution: { width: high ? 1920 : 1280, height: high ? 1080 : 720, frameRate: 60 },
     })
     await this.enqueue(async () => {
       if (this.closed || generation !== this.generation) { tracks.forEach(t => t.stop()); return }
       this.track = tracks.find(t => t.kind === Track.Kind.Video) as LocalVideoTrack | undefined
+      this.audio = tracks.find(t => t.kind === Track.Kind.Audio) as LocalAudioTrack | undefined
+      // Tab audio is isolated from this call; full-system browser capture may echo callers.
+      if (this.audio && this.track?.mediaStreamTrack.getSettings().displaySurface !== 'browser') {
+        this.audio.stop(); this.audio = undefined
+        this.error('For stream audio, share a browser tab and enable its audio.')
+      }
       this.high = high
       this.track?.on(TrackEvent.Ended, this.ended)
-      try { await this.reconcile() } catch (error) { await this.clear(); throw error }
+      try {
+        await this.reconcile()
+        if (this.audio) await this.room.localParticipant.publishTrack(this.audio, {
+          source: Track.Source.ScreenShareAudio, dtx: false, forceStereo: true,
+          audioPreset: { maxBitrate: 128_000 },
+        })
+      } catch (error) { await this.clear(); throw error }
     })
   }
   private async reconcile() {
@@ -80,14 +93,15 @@ export class ScreenPublisher {
   }
   private async clear() {
     const track = this.track
+    const audio = this.audio
+    this.audio = undefined
     this.track = undefined
     this.codec = undefined
-    if (track) {
-      track.off(TrackEvent.Ended, this.ended)
-      track.stop()
-      await this.room.localParticipant.unpublishTrack(track)
-    }
+    audio?.stop()
+    if (track) { track.off(TrackEvent.Ended, this.ended); track.stop() }
+    await Promise.allSettled([audio, track].filter(t => t !== undefined).map(t => this.room.localParticipant.unpublishTrack(t)))
   }
+
   stop() {
     ++this.generation
     return this.enqueue(() => this.clear())
@@ -100,6 +114,7 @@ export class ScreenPublisher {
     this.room.off(RoomEvent.ParticipantAttributesChanged, this.changed)
     this.room.off(RoomEvent.Reconnected, this.reconnected)
     this.track?.stop()
+    this.audio?.stop()
     void this.stop().catch(() => undefined)
   }
 }

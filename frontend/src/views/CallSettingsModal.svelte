@@ -1,4 +1,5 @@
 <script lang="ts">
+  import PlaybackMix from './PlaybackMix.svelte'
   import { createMutation } from '@tanstack/svelte-query'
 
   import { SlidersHorizontal, X } from '@lucide/svelte'
@@ -166,6 +167,7 @@
           selectDevice('audioOutputId', 'audiooutput', value)}
         disabled={!('setSinkId' in HTMLMediaElement.prototype)}
       />
+      <PlaybackMix />
       <label class="range-setting">
         <span
           >Microphone volume <strong>{deviceValues.microphoneGain}%</strong

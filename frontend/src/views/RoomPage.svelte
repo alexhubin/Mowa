@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onMount } from 'svelte'
+  import { applyRoomMix, applyTrackVolume, mixEvent } from '../playbackMix'
+  import type { RemoteAudioTrack } from 'livekit-client'
 
   import {
     createQuery,
@@ -173,6 +175,12 @@
       closeActiveCall()
     }
   })
+  onMount(() => {
+    const update = () => { if (activeCall) applyRoomMix(activeCall) }
+    window.addEventListener(mixEvent, update)
+    window.addEventListener('storage', update)
+    return () => { window.removeEventListener(mixEvent, update); window.removeEventListener('storage', update) }
+  })
   const join = createMutation(() => ({
     mutationFn: async () => {
       disposed = false
@@ -203,9 +211,10 @@
       ] as const
       events.forEach((event) => nextCall.on(event, refresh))
 
-      nextCall.on(RoomEvent.TrackSubscribed, (track) => {
+      nextCall.on(RoomEvent.TrackSubscribed, (track, publication) => {
         refresh()
         if (track.kind === Track.Kind.Audio && audioHost) {
+          applyTrackVolume(track as RemoteAudioTrack, publication.source)
           const element = track.attach()
           element.dataset.movaAudio = track.sid ?? ''
           // LiveKit owns the attached audio elements in this dedicated host.

@@ -1,4 +1,5 @@
 <script lang="ts">
+  import PlaybackMix from './PlaybackMix.svelte'
   import { onMount } from 'svelte'
 
   import { createQuery, useQueryClient } from '@tanstack/svelte-query'
@@ -119,6 +120,7 @@
             onChange={(value) => updateDevice('audioOutputId', value)}
             disabled={!('setSinkId' in HTMLMediaElement.prototype)}
           />
+          <PlaybackMix />
           <label class="range-setting">
             <span
               >Microphone volume <strong
