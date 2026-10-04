@@ -144,6 +144,7 @@ func (s *Server) Handler() http.Handler {
 			r.Post("/api/calls/{callID}/end", s.endDirectCall)
 			r.Post("/api/rooms", s.createRoom)
 			r.Post("/api/presence", s.presence)
+			r.Post("/api/desktop/diagnostics", s.desktopDiagnostic)
 		})
 	})
 

@@ -255,6 +255,20 @@ func (s *Server) expireStaleCalls(ctx context.Context) {
 
 func (s *Server) StartBackgroundJobs(ctx context.Context) {
 	go func() {
+		ticker := time.NewTicker(time.Hour)
+		defer ticker.Stop()
+		for {
+			if _, err := s.db.ExecContext(ctx, "DELETE FROM desktop_diagnostics WHERE received_at < now()-interval '14 days'"); err != nil && ctx.Err() == nil {
+				slog.Warn("purge desktop diagnostics", "error", err)
+			}
+			select {
+			case <-ctx.Done():
+				return
+			case <-ticker.C:
+			}
+		}
+	}()
+	go func() {
 		ticker := time.NewTicker(callExpiryInterval)
 		defer ticker.Stop()
 		for {

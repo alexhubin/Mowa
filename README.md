@@ -298,3 +298,36 @@ frontend/                        Svelte application
 deploy/Caddyfile                 Edge routing and TLS
 compose.yaml                     Full local/production stack
 ```
+
+## Desktop call diagnostics
+
+The desktop app sends authenticated, event-only reports to `POST /api/desktop/diagnostics`.
+It sends call start/connection, screen start/stop, codec changes, GPU-to-CPU fallback,
+deduplicated error categories, reconnect events, and one final summary on normal call exit.
+There are no periodic uploads. RTP statistics are sampled locally in memory every 15 seconds
+and aggregated for the final summary (sampled positive video FPS, cumulative traffic,
+packet loss, video freezes/dropped frames, audio concealment, maximum jitter).
+`nvenc` / `amf` identify the selected external Windows encoder; `software` is CPU encoding.
+`sdk_auto` on macOS means the SDK selected the implementation, not proof of hardware acceleration.
+
+The report never includes raw SDK logs, error text, tokens, device/window names, messages,
+IP addresses, audio or video. Reports include account identity (from the authenticated
+session), per-call random ID, platform, architecture and app build revision. A visible
+**Diagnostics** switch disables collection/upload; only that boolean setting is saved to disk.
+
+Each JSON report is at most 4 KiB. Desktop allows at most 30 intermediate events plus a
+final summary per call, with a 16-entry memory queue and a 3-second upload timeout.
+Duplicate errors are counted in the summary. Uploads make one attempt, with no disk queue
+or retries. Network failure, forced termination or crashes can lose reports, including the
+final summary. Absence of a final report does not by itself prove a crash. The server accepts
+at most 120 events per account per hour, deduplicates event IDs, and purges reports older
+than 14 days on startup and hourly. There is no public report-reading endpoint.
+
+Read the latest reports over the existing administrative SSH connection:
+
+```sh
+ssh northstar 'cd /opt/mova && docker compose -f compose.vps.yaml exec -T postgres psql -U mova -d mova' < scripts/desktop-diagnostics.sql
+```
+
+To investigate one user, add `AND u.username = 'friend'` to the query's WHERE clause.
+Never publish database dumps or raw report exports in public issue trackers.

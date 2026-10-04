@@ -10,6 +10,14 @@ import (
 	"time"
 )
 
+type DesktopDiagnostic struct {
+	UserID     string          `json:"user_id"`
+	EventID    string          `json:"event_id"`
+	CallID     string          `json:"call_id"`
+	ReceivedAt time.Time       `json:"received_at"`
+	Payload    json.RawMessage `json:"payload"`
+}
+
 type DesktopLogin struct {
 	ID        string         `json:"id"`
 	Challenge string         `json:"challenge"`
