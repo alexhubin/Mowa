@@ -160,6 +160,8 @@ jobs:
           cache-to: type=gha,mode=max,scope=${{ matrix.component }}
 
   deploy:
+    # Northstar VPS retired; keep code checks enabled.
+    if: ${{ false }}
     name: Deploy to VPS
     needs: [backend, frontend, queries, caddy, images]
     runs-on: ubuntu-latest
